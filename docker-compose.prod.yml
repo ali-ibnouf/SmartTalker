@@ -1,0 +1,88 @@
+# =============================================================================
+# SmartTalker — Production Docker Compose Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Core: Remove direct port mapping (nginx proxies), production env
+  # ---------------------------------------------------------------------------
+  core:
+    ports: !reset []
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LLM_BASE_URL=http://ollama:11434
+      - APP_ENV=production
+      - DEBUG=false
+
+  # ---------------------------------------------------------------------------
+  # Nginx: Reverse proxy with SSL termination
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: smarttalker-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./outputs:/app/files:ro
+      - ./frontend:/app/frontend:ro
+    depends_on:
+      - core
+    networks:
+      - smarttalker-net
+
+  # ---------------------------------------------------------------------------
+  # Alertmanager: Alert notification delivery
+  # ---------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: smarttalker-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - smarttalker-net
+
+  # ---------------------------------------------------------------------------
+  # Redis Exporter: Prometheus metrics for Redis
+  # ---------------------------------------------------------------------------
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: smarttalker-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - smarttalker-net
+
+  # ---------------------------------------------------------------------------
+  # NVIDIA GPU Exporter: Prometheus metrics for GPU
+  # ---------------------------------------------------------------------------
+  nvidia-gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.2.1
+    container_name: smarttalker-gpu-exporter
+    restart: unless-stopped
+    ports:
+      - "9445:9835"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    networks:
+      - smarttalker-net

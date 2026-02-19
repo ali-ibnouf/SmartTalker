@@ -1,0 +1,47 @@
+groups:
+  - name: smarttalker_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been unreachable for 2 minutes."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP error rate on {{ $labels.instance }}"
+          description: "More than 5% of requests are returning 5xx errors over the last 5 minutes."
+
+      - alert: GPUMemoryHigh
+        expr: nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU memory usage above 90% on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space below 10% on {{ $labels.instance }}"
+          description: "Filesystem {{ $labels.mountpoint }} has only {{ $value | humanizePercentage }} free space."
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis exporter reports redis_up == 0 for 2 minutes."

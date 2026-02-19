@@ -1,0 +1,90 @@
+# =============================================================================
+# SmartTalker — .gitignore
+# =============================================================================
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# ── Virtual Environment ─────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ── Environment ──────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── AI Models (large files) ─────────────────────────────────────────────────
+models/*
+!models/README.md
+!models/**/
+models/**/*
+!models/**/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.ckpt
+
+# ── Generated Output ────────────────────────────────────────────────────────
+outputs/*
+!outputs/README.md
+!outputs/**/
+outputs/**/*
+!outputs/**/.gitkeep
+files/*
+!files/.gitkeep
+logs/
+*.wav
+*.mp3
+*.ogg
+*.mp4
+*.avi
+*.webm
+*.m4a
+
+# ── Keep avatar and voice assets ───────────────────────────────────────────
+!avatars/**/*.png
+!avatars/**/*.jpg
+!avatars/**/*.jpeg
+!avatars/**/*.webp
+!voices/README.md
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+.docker/
+
+# ── Test & Coverage ──────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak

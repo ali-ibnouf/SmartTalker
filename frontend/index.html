@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartTalker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ── Header ─────────────────────────────────────────────────── -->
+    <header id="header">
+        <div class="header-left">
+            <h1>SmartTalker</h1>
+            <span class="subtitle">Digital Human AI Agent</span>
+        </div>
+        <div class="header-right">
+            <span id="status-dot" class="dot disconnected"></span>
+            <span id="status-text">Disconnected</span>
+        </div>
+    </header>
+
+    <!-- ── Main Layout ────────────────────────────────────────────── -->
+    <main id="main">
+        <!-- Left: Chat Panel -->
+        <section id="chat-panel">
+            <div id="chat-messages"></div>
+
+            <div id="chat-input-bar">
+                <input
+                    type="text"
+                    id="chat-input"
+                    placeholder="Type a message..."
+                    autocomplete="off"
+                    maxlength="2000"
+                    disabled
+                />
+                <button id="send-btn" disabled>Send</button>
+            </div>
+        </section>
+
+        <!-- Right: Media Panel -->
+        <section id="media-panel">
+            <!-- Video / Avatar Display -->
+            <div id="video-container">
+                <video id="remote-video" autoplay playsinline></video>
+                <div id="video-placeholder">
+                    <div class="avatar-icon">&#128100;</div>
+                    <p>Avatar video will appear here</p>
+                </div>
+            </div>
+
+            <!-- Audio Playback (hidden, used programmatically) -->
+            <audio id="response-audio" preload="auto"></audio>
+
+            <!-- WebRTC Controls -->
+            <div id="rtc-controls">
+                <button id="connect-btn">Connect</button>
+                <button id="disconnect-btn" disabled>Disconnect</button>
+                <button id="mic-btn" class="mic-off" disabled>
+                    <span class="mic-icon">&#127908;</span>
+                    <span class="mic-label">Push to Talk</span>
+                </button>
+            </div>
+
+            <!-- Audio Visualizer -->
+            <canvas id="audio-visualizer" width="300" height="60"></canvas>
+
+            <!-- Session Config -->
+            <details id="config-panel">
+                <summary>Session Settings</summary>
+                <div class="config-grid">
+                    <label for="cfg-language">Language</label>
+                    <select id="cfg-language">
+                        <option value="ar" selected>Arabic</option>
+                        <option value="en">English</option>
+                    </select>
+
+                    <label for="cfg-avatar">Avatar ID</label>
+                    <input type="text" id="cfg-avatar" value="default" />
+
+                    <label for="cfg-voice">Voice ID</label>
+                    <input type="text" id="cfg-voice" placeholder="default" />
+
+                    <label for="cfg-video">Enable Video</label>
+                    <input type="checkbox" id="cfg-video" />
+                </div>
+                <button id="cfg-apply">Apply Settings</button>
+            </details>
+
+            <!-- Latency Info -->
+            <div id="latency-bar">
+                <span id="latency-text">--</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- ── Footer ─────────────────────────────────────────────────── -->
+    <footer id="footer">
+        <span>SmartTalker v1.0</span>
+        <span id="session-id-display">Session: --</span>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
