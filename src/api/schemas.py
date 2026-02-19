@@ -6,9 +6,18 @@ PipelineResponse, HealthResponse, ErrorResponse, AvatarInfo, VoiceInfo.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# Allowed emotion labels (matches EmotionEngine output + "neutral" default)
+VALID_EMOTIONS = frozenset({
+    "neutral", "happy", "sad", "angry", "surprised", "fearful", "disgusted",
+})
+
+# Language code pattern: 2-5 chars (ISO 639-1/BCP 47, e.g. "ar", "en", "zh-CN")
+_LANG_RE = re.compile(r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})?$")
 
 
 # =============================================================================
@@ -33,6 +42,21 @@ class TextRequest(BaseModel):
     language: str = Field(default="ar", description="Language code")
     voice_id: Optional[str] = Field(default=None, description="Voice clone ID")
 
+    @field_validator("emotion")
+    @classmethod
+    def _validate_emotion(cls, v: str) -> str:
+        v = v.lower()
+        if v not in VALID_EMOTIONS:
+            raise ValueError(f"emotion must be one of: {', '.join(sorted(VALID_EMOTIONS))}")
+        return v
+
+    @field_validator("language")
+    @classmethod
+    def _validate_language(cls, v: str) -> str:
+        if not _LANG_RE.match(v):
+            raise ValueError("language must be a valid code (e.g. 'ar', 'en', 'zh-CN')")
+        return v.lower()
+
 
 class AudioChatRequest(BaseModel):
     """Metadata for audio-chat multipart upload.
@@ -52,6 +76,21 @@ class AudioChatRequest(BaseModel):
     language: str = Field(default="ar", description="Language code")
     voice_id: Optional[str] = Field(default=None, description="Voice clone ID")
 
+    @field_validator("emotion")
+    @classmethod
+    def _validate_emotion(cls, v: str) -> str:
+        v = v.lower()
+        if v not in VALID_EMOTIONS:
+            raise ValueError(f"emotion must be one of: {', '.join(sorted(VALID_EMOTIONS))}")
+        return v
+
+    @field_validator("language")
+    @classmethod
+    def _validate_language(cls, v: str) -> str:
+        if not _LANG_RE.match(v):
+            raise ValueError("language must be a valid code (e.g. 'ar', 'en', 'zh-CN')")
+        return v.lower()
+
 
 class VoiceCloneRequest(BaseModel):
     """Metadata for voice-clone multipart upload.
@@ -65,6 +104,13 @@ class VoiceCloneRequest(BaseModel):
 
     voice_name: str = Field(..., min_length=1, max_length=100, description="Voice name")
     language: str = Field(default="ar", description="Voice language")
+
+    @field_validator("language")
+    @classmethod
+    def _validate_language(cls, v: str) -> str:
+        if not _LANG_RE.match(v):
+            raise ValueError("language must be a valid code (e.g. 'ar', 'en', 'zh-CN')")
+        return v.lower()
 
 
 # =============================================================================

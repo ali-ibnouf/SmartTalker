@@ -126,8 +126,8 @@ class WhatsAppClient:
             True if signature is valid.
         """
         if not self._app_secret:
-            logger.warning("App secret not configured — skipping signature verification")
-            return True
+            logger.warning("App secret not configured — rejecting unverifiable request")
+            return False
 
         expected = "sha256=" + hmac.new(
             self._app_secret.encode(),

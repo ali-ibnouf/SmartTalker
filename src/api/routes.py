@@ -213,6 +213,11 @@ async def audio_chat(
         raise HTTPException(status_code=504, detail="Pipeline processing timed out")
     except SmartTalkerError as exc:
         raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # =============================================================================

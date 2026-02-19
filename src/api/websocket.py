@@ -674,18 +674,20 @@ async def _authenticate_websocket(
     Returns:
         True if authenticated successfully.
     """
+    import hmac as _hmac
     import json as _json
 
-    # Check query parameter first
-    query_key = websocket.query_params.get("api_key")
-    if query_key == api_key:
+    # Check query parameter first (constant-time comparison)
+    query_key = websocket.query_params.get("api_key", "")
+    if query_key and _hmac.compare_digest(query_key, api_key):
         return True
 
     # Wait for auth message with 5 second timeout
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
         data = _json.loads(raw)
-        if data.get("type") == "auth" and data.get("api_key") == api_key:
+        client_key = data.get("api_key", "")
+        if data.get("type") == "auth" and client_key and _hmac.compare_digest(client_key, api_key):
             return True
     except (asyncio.TimeoutError, _json.JSONDecodeError, TypeError):
         pass

@@ -133,6 +133,10 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     # ── Shutdown ─────────────────────────────────────────────────────────
     logger.info("SmartTalker shutting down...")
     cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     await pipeline.unload_all()
     await whatsapp.close()
     if redis_client:

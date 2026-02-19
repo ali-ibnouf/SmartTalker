@@ -100,6 +100,7 @@ class SmartTalkerPipeline:
 
         # GPU concurrency semaphore — limits parallel GPU inferences
         self._gpu_semaphore = asyncio.Semaphore(_DEFAULT_GPU_CONCURRENCY)
+        self._gpu_active: int = 0  # tracks tasks holding the semaphore
 
         # Enforce GPU memory fraction limit
         try:
@@ -189,19 +190,20 @@ class SmartTalkerPipeline:
         Returns:
             Return value of fn.
         """
-        # Track how many tasks are waiting for the GPU
-        waiting = _DEFAULT_GPU_CONCURRENCY - self._gpu_semaphore._value
-        GPU_QUEUE_DEPTH.set(waiting)
+        # Track how many tasks are active on the GPU
+        GPU_QUEUE_DEPTH.set(self._gpu_active)
 
         loop = asyncio.get_running_loop()
         async with self._gpu_semaphore:
-            GPU_QUEUE_DEPTH.set(_DEFAULT_GPU_CONCURRENCY - self._gpu_semaphore._value)
+            self._gpu_active += 1
+            GPU_QUEUE_DEPTH.set(self._gpu_active)
             try:
                 return await loop.run_in_executor(
                     None, functools.partial(fn, *args, **kwargs)
                 )
             finally:
-                GPU_QUEUE_DEPTH.set(_DEFAULT_GPU_CONCURRENCY - self._gpu_semaphore._value)
+                self._gpu_active -= 1
+                GPU_QUEUE_DEPTH.set(self._gpu_active)
 
     # ═════════════════════════════════════════════════════════════════════
     # Text Pipeline
@@ -252,7 +254,7 @@ class SmartTalkerPipeline:
         breakdown["llm_ms"] = llm_result.latency_ms
 
         # Update Request Metrics
-        ACTIVE_SESSIONS.set(len(self._llm._sessions))
+        ACTIVE_SESSIONS.set(self._llm.session_count)
         try:
             import torch
             if torch.cuda.is_available():

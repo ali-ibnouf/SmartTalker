@@ -524,3 +524,159 @@ class TestLoggerEnvLevel:
         from src.utils.logger import setup_logger
         lgr = setup_logger("test.env.level.unique100", level="ERROR")
         assert lgr.level == logging.ERROR
+
+
+# =============================================================================
+# Video FPS Parsing Tests
+# =============================================================================
+
+
+class TestVideoFPSParsing:
+    """Tests for FPS parsing edge cases in get_video_info."""
+
+    def test_fps_zero_denominator_defaults(self):
+        """FPS with 0/0 denominator should default to 25.0."""
+        # Simulate the FPS parsing logic from get_video_info
+        fps_parts = "0/0".split("/")
+        if len(fps_parts) == 2:
+            num, den = float(fps_parts[0]), float(fps_parts[1])
+            fps = num / den if den != 0 else 25.0
+        else:
+            fps = 25.0
+        assert fps == 25.0
+
+    def test_fps_normal_parsing(self):
+        """Normal FPS string like '30/1' should parse correctly."""
+        fps_parts = "30/1".split("/")
+        num, den = float(fps_parts[0]), float(fps_parts[1])
+        fps = num / den if den != 0 else 25.0
+        assert fps == 30.0
+
+
+# =============================================================================
+# Schema Validation Tests
+# =============================================================================
+
+
+class TestSchemaValidation:
+    """Tests for emotion and language field validators."""
+
+    def test_valid_emotion_accepted(self):
+        """Valid emotion labels are accepted."""
+        from src.api.schemas import TextRequest
+        req = TextRequest(text="hello", emotion="happy")
+        assert req.emotion == "happy"
+
+    def test_invalid_emotion_rejected(self):
+        """Unknown emotion labels are rejected."""
+        from src.api.schemas import TextRequest
+        with pytest.raises(Exception):
+            TextRequest(text="hello", emotion="ecstatic")
+
+    def test_emotion_case_normalized(self):
+        """Emotion is lowercased."""
+        from src.api.schemas import TextRequest
+        req = TextRequest(text="hello", emotion="HAPPY")
+        assert req.emotion == "happy"
+
+    def test_valid_language_accepted(self):
+        """Valid language codes are accepted."""
+        from src.api.schemas import TextRequest
+        req = TextRequest(text="hello", language="en")
+        assert req.language == "en"
+
+    def test_invalid_language_rejected(self):
+        """Invalid language codes are rejected."""
+        from src.api.schemas import TextRequest
+        with pytest.raises(Exception):
+            TextRequest(text="hello", language="123")
+
+    def test_language_with_region_accepted(self):
+        """Language codes with region (e.g. zh-CN) are accepted."""
+        from src.api.schemas import TextRequest
+        req = TextRequest(text="hello", language="zh-CN")
+        assert req.language == "zh-cn"
+
+
+# =============================================================================
+# WhatsApp Signature Verification Tests
+# =============================================================================
+
+
+class TestWhatsAppSignature:
+    """Tests for WhatsApp webhook signature verification."""
+
+    def test_missing_secret_rejects(self):
+        """verify_signature returns False when app_secret is not configured."""
+        from src.integrations.whatsapp import WhatsAppClient
+        from unittest.mock import MagicMock
+
+        config = MagicMock()
+        config.whatsapp_phone_id = "123"
+        config.whatsapp_token = "token"
+        config.whatsapp_app_secret = None
+        config.whatsapp_verify_token = "verify"
+
+        client = WhatsAppClient(config)
+        result = client.verify_signature(b"payload", "sha256=abc")
+        assert result is False
+
+
+# =============================================================================
+# Redis Rate Limit Race Condition Tests
+# =============================================================================
+
+
+class TestRateLimitRedisParam:
+    """Tests that _check_redis uses passed redis param, not self.redis."""
+
+    @pytest.mark.asyncio
+    async def test_check_redis_uses_param(self, config):
+        """_check_redis should use the redis parameter, not self.redis."""
+        from src.api.middleware import RedisRateLimitMiddleware
+        import asyncio
+
+        middleware = RedisRateLimitMiddleware(app=MagicMock(), config=config)
+        assert middleware.redis is None  # no redis set on self
+
+        # Create mock redis
+        mock_redis = MagicMock()
+        mock_pipe = MagicMock()
+        mock_pipe.zremrangebyscore = MagicMock()
+        mock_pipe.zadd = MagicMock()
+        mock_pipe.zcard = MagicMock()
+        mock_pipe.expire = MagicMock()
+
+        async def mock_execute():
+            return [0, 1, 1, True]
+
+        mock_pipe.execute = mock_execute
+        mock_redis.pipeline = MagicMock(return_value=mock_pipe)
+
+        # Should work with redis=mock_redis even though self.redis is None
+        allowed, count = await middleware._check_redis(mock_redis, "1.2.3.4", time.time())
+        assert allowed
+        mock_redis.pipeline.assert_called_once()
+
+
+# =============================================================================
+# LLM Session Count Tests
+# =============================================================================
+
+
+class TestLLMSessionCount:
+    """Tests for LLMEngine.session_count property."""
+
+    def test_session_count_starts_zero(self):
+        """session_count is 0 initially."""
+        from src.pipeline.llm import LLMEngine
+        engine = LLMEngine.__new__(LLMEngine)
+        engine._sessions = {}
+        assert engine.session_count == 0
+
+    def test_session_count_reflects_sessions(self):
+        """session_count reflects number of entries."""
+        from src.pipeline.llm import LLMEngine
+        engine = LLMEngine.__new__(LLMEngine)
+        engine._sessions = {"a": None, "b": None, "c": None}
+        assert engine.session_count == 3

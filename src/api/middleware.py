@@ -235,8 +235,13 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         # In-memory fallback
         self._requests: dict[str, list[float]] = {}
 
-    async def _check_redis(self, client_ip: str, now: float) -> tuple[bool, int]:
+    async def _check_redis(self, redis: Any, client_ip: str, now: float) -> tuple[bool, int]:
         """Check rate limit using Redis sorted sets.
+
+        Args:
+            redis: Active Redis client instance.
+            client_ip: Client IP address.
+            now: Current timestamp.
 
         Returns:
             (allowed, current_count) tuple.
@@ -244,7 +249,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         key = f"rate_limit:{client_ip}"
         window_start = now - 60.0
 
-        pipe = self.redis.pipeline()
+        pipe = redis.pipeline()
         pipe.zremrangebyscore(key, 0, window_start)
         pipe.zadd(key, {f"{now}": now})
         pipe.zcard(key)
@@ -254,7 +259,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         current_count = results[2]
         if current_count > self.limit:
             # Remove the just-added entry since we're rejecting
-            await self.redis.zrem(key, f"{now}")
+            await redis.zrem(key, f"{now}")
             return False, current_count
         return True, current_count
 
@@ -305,9 +310,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         allowed = True
         if redis:
             try:
-                # Use resolved redis instead of self.redis
-                self.redis = redis
-                allowed, _ = await self._check_redis(client_ip, now)
+                allowed, _ = await self._check_redis(redis, client_ip, now)
             except Exception:
                 if not RedisRateLimitMiddleware._fallback_warned:
                     logger.warning(

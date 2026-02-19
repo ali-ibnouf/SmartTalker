@@ -171,6 +171,11 @@ class LLMEngine:
         self._sessions.clear()
         logger.info("All conversation histories cleared")
 
+    @property
+    def session_count(self) -> int:
+        """Return number of active sessions."""
+        return len(self._sessions)
+
     # ── Client ───────────────────────────────────────────────────────────
 
     async def _get_client(self) -> httpx.AsyncClient:

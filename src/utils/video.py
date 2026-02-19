@@ -7,12 +7,11 @@ validate_image, resize_image.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
 from src.utils.exceptions import SmartTalkerError
-from src.utils.ffmpeg import run_ffmpeg as _run_ffmpeg
+from src.utils.ffmpeg import run_ffmpeg as _run_ffmpeg, run_ffprobe as _run_ffprobe
 from src.utils.logger import setup_logger
 
 logger = setup_logger("utils.video")
@@ -93,27 +92,18 @@ def get_video_info(video_path: Path) -> dict[str, Any]:
     if not video_path.exists():
         raise SmartTalkerError(message=f"Video file not found: {video_path}")
 
-    cmd = [
-        "ffprobe",
-        "-v", "quiet",
-        "-print_format", "json",
-        "-show_format",
-        "-show_streams",
-        str(video_path),
-    ]
-
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
-        data = json.loads(result.stdout)
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        stdout = _run_ffprobe([
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            str(video_path),
+        ], timeout=30)
+        data = json.loads(stdout)
+    except json.JSONDecodeError as exc:
         raise SmartTalkerError(
-            message="Failed to probe video file",
+            message="Failed to parse video probe output",
             detail=str(exc),
             original_exception=exc,
         ) from exc
@@ -131,9 +121,13 @@ def get_video_info(video_path: Path) -> dict[str, Any]:
             detail=str(video_path),
         )
 
-    # Parse FPS from r_frame_rate (e.g., "25/1")
+    # Parse FPS from r_frame_rate (e.g., "25/1") — guard against "0/0"
     fps_parts = video_stream.get("r_frame_rate", "25/1").split("/")
-    fps = float(fps_parts[0]) / float(fps_parts[1]) if len(fps_parts) == 2 else 25.0
+    if len(fps_parts) == 2:
+        num, den = float(fps_parts[0]), float(fps_parts[1])
+        fps = num / den if den != 0 else 25.0
+    else:
+        fps = 25.0
 
     width = int(video_stream.get("width", 0))
     height = int(video_stream.get("height", 0))
@@ -219,25 +213,17 @@ def _get_image_dimensions(image_path: Path) -> dict[str, int]:
     Returns:
         Dict with 'width' and 'height' keys.
     """
-    cmd = [
-        "ffprobe",
-        "-v", "quiet",
-        "-show_entries", "stream=width,height",
-        "-of", "json",
-        str(image_path),
-    ]
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=15,
-        )
-        data = json.loads(result.stdout)
+        stdout = _run_ffprobe([
+            "-v", "quiet",
+            "-show_entries", "stream=width,height",
+            "-of", "json",
+            str(image_path),
+        ], timeout=15)
+        data = json.loads(stdout)
         stream = data["streams"][0]
         return {"width": int(stream["width"]), "height": int(stream["height"])}
-    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError) as exc:
+    except (json.JSONDecodeError, KeyError, IndexError) as exc:
         raise SmartTalkerError(
             message="Failed to read image dimensions",
             original_exception=exc,
