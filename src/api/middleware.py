@@ -24,7 +24,10 @@ from src.utils.logger import set_correlation_id, setup_logger
 logger = setup_logger("api.middleware")
 
 # Paths excluded from auth and rate limiting
-_EXCLUDED_PATHS = {"/api/v1/health", "/docs", "/openapi.json", "/redoc", "/metrics"}
+_EXCLUDED_PATHS = {
+    "/api/v1/health", "/docs", "/openapi.json", "/redoc", "/metrics",
+    "/api/v1/whatsapp/webhook",  # Meta sends unsigned GET/POST for verification
+}
 
 
 def _is_excluded(path: str) -> bool:
@@ -121,9 +124,13 @@ def get_cors_config(origins: str = "*") -> dict:
     else:
         allow_origins = [o.strip() for o in origins.split(",") if o.strip()]
 
+    # CORS spec forbids allow_credentials with wildcard origin —
+    # browsers silently reject the response in that combination.
+    use_credentials = allow_origins != ["*"]
+
     return {
         "allow_origins": allow_origins,
-        "allow_credentials": True,
+        "allow_credentials": use_credentials,
         "allow_methods": ["*"],
         "allow_headers": ["*"],
         "expose_headers": ["X-Request-ID"],

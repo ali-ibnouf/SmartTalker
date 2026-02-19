@@ -262,7 +262,6 @@ class WebSocketManager:
             await self._send_error(
                 session.websocket,
                 "Internal server error",
-                str(exc),
             )
 
     # ═════════════════════════════════════════════════════════════════════
@@ -378,7 +377,6 @@ class WebSocketManager:
             await self._send_error(
                 session.websocket,
                 "Pipeline processing failed",
-                str(exc),
             )
 
     # ═════════════════════════════════════════════════════════════════════
@@ -485,6 +483,9 @@ class WebSocketManager:
             return
 
         total_bytes = buffer.total_bytes
+        # Capture buffer metadata before reset() clears state
+        audio_language = buffer.language
+        audio_format = buffer.format
 
         # Acknowledge receipt
         await self._send_json(session.websocket, {
@@ -493,7 +494,7 @@ class WebSocketManager:
         })
 
         # Save to temp file
-        ext = f".{buffer.format}" if not buffer.format.startswith(".") else buffer.format
+        ext = f".{audio_format}" if not audio_format.startswith(".") else audio_format
         temp_path = self._storage_dir / f"ws_{session.session_id}_{uuid.uuid4().hex[:8]}{ext}"
 
         try:
@@ -526,7 +527,7 @@ class WebSocketManager:
                 avatar_id=session.config.avatar_id,
                 voice_id=session.config.voice_id,
                 emotion="neutral",
-                language=buffer.language,
+                language=audio_language,
                 enable_video=session.config.enable_video,
                 session_id=session.session_id,
             )
@@ -549,7 +550,6 @@ class WebSocketManager:
             await self._send_error(
                 session.websocket,
                 "Pipeline processing failed",
-                str(exc),
             )
         finally:
             # Clean up temp file

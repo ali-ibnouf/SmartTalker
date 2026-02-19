@@ -7,6 +7,40 @@ import subprocess
 from src.utils.exceptions import SmartTalkerError
 
 
+def _run_cmd(cmd: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess with proper timeout and cleanup.
+
+    Uses Popen to ensure the child process tree is killed
+    on timeout rather than relying on subprocess.run's cleanup.
+
+    Args:
+        cmd: Full command list.
+        timeout: Max seconds before the process is killed.
+
+    Returns:
+        Completed process result.
+
+    Raises:
+        FileNotFoundError: If the binary is not found.
+        subprocess.CalledProcessError: If the command exits non-zero.
+        subprocess.TimeoutExpired: If the process exceeds timeout.
+    """
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        raise
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(
+            proc.returncode, cmd, output=stdout, stderr=stderr,
+        )
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
 def run_ffmpeg(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess[str]:
     """Run an ffmpeg command and return the result.
 
@@ -22,13 +56,7 @@ def run_ffmpeg(args: list[str], timeout: int = 120) -> subprocess.CompletedProce
     """
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *args]
     try:
-        return subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=timeout,
-        )
+        return _run_cmd(cmd, timeout)
     except FileNotFoundError:
         raise SmartTalkerError(
             message="ffmpeg not found",
@@ -62,17 +90,11 @@ def run_ffprobe(args: list[str], timeout: int = 30) -> str:
     """
     cmd = ["ffprobe", "-hide_banner", *args]
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=timeout,
-        )
+        result = _run_cmd(cmd, timeout)
         return result.stdout.strip()
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         raise SmartTalkerError(
             message="ffprobe command failed",
             detail=str(exc),
-            original_exception=exc if isinstance(exc, Exception) else None,
+            original_exception=exc,
         ) from exc

@@ -388,7 +388,7 @@ class TestSharedFFmpeg:
         from unittest.mock import patch
         from src.utils.ffmpeg import run_ffmpeg
         from src.utils.exceptions import SmartTalkerError
-        with patch("subprocess.run", side_effect=FileNotFoundError):
+        with patch("subprocess.Popen", side_effect=FileNotFoundError):
             with pytest.raises(SmartTalkerError, match="ffmpeg not found"):
                 run_ffmpeg(["-version"])
 
@@ -415,3 +415,112 @@ class TestRateLimiterPruning:
         assert allowed
         # All stale IPs should have been pruned
         assert len(middleware._requests) < 100
+
+
+# =============================================================================
+# WebSocket AudioBuffer Tests
+# =============================================================================
+
+
+class TestAudioBufferReset:
+    """Tests for AudioBuffer.reset() preserving language/format."""
+
+    def test_reset_clears_chunks(self):
+        """reset() clears chunks and started_at."""
+        from src.api.websocket import AudioBuffer
+        buf = AudioBuffer()
+        buf.chunks.append(b"\x00" * 100)
+        buf.started_at = 12345.0
+        buf.language = "en"
+        buf.format = "ogg"
+        buf.reset()
+        assert buf.chunks == []
+        assert buf.started_at == 0.0
+
+    def test_reset_preserves_language_and_format(self):
+        """reset() does not clear language or format fields."""
+        from src.api.websocket import AudioBuffer
+        buf = AudioBuffer()
+        buf.language = "en"
+        buf.format = "ogg"
+        buf.reset()
+        # Language and format are preserved after reset
+        assert buf.language == "en"
+        assert buf.format == "ogg"
+
+
+# =============================================================================
+# CORS Configuration Tests
+# =============================================================================
+
+
+class TestCORSConfig:
+    """Tests for CORS configuration builder."""
+
+    def test_wildcard_disables_credentials(self):
+        """Wildcard origins must disable allow_credentials (CORS spec)."""
+        from src.api.middleware import get_cors_config
+        cfg = get_cors_config("*")
+        assert cfg["allow_origins"] == ["*"]
+        assert cfg["allow_credentials"] is False
+
+    def test_specific_origins_enable_credentials(self):
+        """Specific origins can use allow_credentials."""
+        from src.api.middleware import get_cors_config
+        cfg = get_cors_config("http://localhost:3000,http://example.com")
+        assert "http://localhost:3000" in cfg["allow_origins"]
+        assert cfg["allow_credentials"] is True
+
+
+# =============================================================================
+# Auth Excluded Paths Tests
+# =============================================================================
+
+
+class TestExcludedPaths:
+    """Tests for auth/rate-limit excluded paths."""
+
+    def test_whatsapp_webhook_excluded(self):
+        """WhatsApp webhook path is excluded from auth."""
+        from src.api.middleware import _is_excluded
+        assert _is_excluded("/api/v1/whatsapp/webhook")
+
+    def test_health_excluded(self):
+        """Health endpoint is excluded from auth."""
+        from src.api.middleware import _is_excluded
+        assert _is_excluded("/api/v1/health")
+
+    def test_websocket_paths_excluded(self):
+        """WebSocket paths are excluded from HTTP middleware."""
+        from src.api.middleware import _is_excluded
+        assert _is_excluded("/ws/chat")
+        assert _is_excluded("/ws/rtc")
+
+    def test_api_endpoints_not_excluded(self):
+        """Normal API endpoints are not excluded."""
+        from src.api.middleware import _is_excluded
+        assert not _is_excluded("/api/v1/text-to-speech")
+        assert not _is_excluded("/api/v1/audio-chat")
+
+
+# =============================================================================
+# Logger LOG_LEVEL Environment Variable Tests
+# =============================================================================
+
+
+class TestLoggerEnvLevel:
+    """Tests for logger LOG_LEVEL environment variable support."""
+
+    def test_setup_logger_respects_env(self, monkeypatch):
+        """setup_logger reads LOG_LEVEL env var when no explicit level."""
+        monkeypatch.setenv("LOG_LEVEL", "WARNING")
+        from src.utils.logger import setup_logger
+        lgr = setup_logger("test.env.level.unique99")
+        assert lgr.level == logging.WARNING
+
+    def test_setup_logger_explicit_overrides_env(self, monkeypatch):
+        """Explicit level parameter overrides LOG_LEVEL env var."""
+        monkeypatch.setenv("LOG_LEVEL", "WARNING")
+        from src.utils.logger import setup_logger
+        lgr = setup_logger("test.env.level.unique100", level="ERROR")
+        assert lgr.level == logging.ERROR

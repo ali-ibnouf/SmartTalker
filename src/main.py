@@ -190,7 +190,9 @@ def create_app() -> FastAPI:
         async def ws_rtc(websocket: WebSocket):
             handler = application.state.webrtc_handler
             if handler:
-                await webrtc_signaling_endpoint(websocket, handler)
+                await webrtc_signaling_endpoint(
+                    websocket, handler, api_key=config.api_key,
+                )
 
     # ── Static Files ─────────────────────────────────────────────────────
     config.static_files_dir.mkdir(parents=True, exist_ok=True)

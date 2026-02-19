@@ -7,6 +7,7 @@ log output across all SmartTalker modules.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from contextvars import ContextVar
 from typing import Optional
@@ -85,17 +86,20 @@ class SmartTalkerJsonFormatter(jsonlogger.JsonFormatter):
 
 def setup_logger(
     name: str,
-    level: str = "INFO",
+    level: str | None = None,
 ) -> logging.Logger:
     """Create a structured JSON logger.
 
     Args:
         name: Logger name (typically module path, e.g. "pipeline.asr").
-        level: Logging level string (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        level: Logging level string. Defaults to LOG_LEVEL env var, then "INFO".
 
     Returns:
         Configured Logger instance with JSON output to stdout.
     """
+    if level is None:
+        level = os.environ.get("LOG_LEVEL", "INFO")
+
     logger = logging.getLogger(name)
 
     # Avoid adding duplicate handlers on repeated calls

@@ -421,8 +421,14 @@ async def _process_whatsapp_payload(payload: dict, app):
 # =============================================================================
 
 
+_MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 MB
+
+
 def _save_upload(upload: UploadFile, request: Request) -> Path:
     """Save an uploaded file to the temp directory.
+
+    Reads the file in chunks to enforce a 25 MB size limit without
+    buffering the entire file in memory.
 
     Args:
         upload: Uploaded file from the request.
@@ -432,7 +438,7 @@ def _save_upload(upload: UploadFile, request: Request) -> Path:
         Path to the saved temporary file.
 
     Raises:
-        HTTPException: If the file cannot be saved.
+        HTTPException: If the file cannot be saved or exceeds size limit.
     """
     try:
         config = request.app.state.config
@@ -442,12 +448,27 @@ def _save_upload(upload: UploadFile, request: Request) -> Path:
         suffix = Path(upload.filename or "audio.wav").suffix
         temp_path = temp_dir / f"upload_{uuid.uuid4().hex[:12]}{suffix}"
 
-        content = upload.file.read()
-        temp_path.write_bytes(content)
+        total = 0
+        with open(temp_path, "wb") as f:
+            while True:
+                chunk = upload.file.read(64 * 1024)  # 64 KB chunks
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > _MAX_UPLOAD_SIZE:
+                    f.close()
+                    temp_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds {_MAX_UPLOAD_SIZE // (1024 * 1024)}MB limit",
+                    )
+                f.write(chunk)
 
-        logger.info("Upload saved", extra={"path": str(temp_path), "size_bytes": len(content)})
+        logger.info("Upload saved", extra={"path": str(temp_path), "size_bytes": total})
         return temp_path
 
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=400,

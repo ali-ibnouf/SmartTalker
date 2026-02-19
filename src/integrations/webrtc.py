@@ -128,7 +128,8 @@ class WebRTCSession:
         """Continuously capture audio frames from a WebRTC audio track.
 
         Runs in a background task. Each frame's PCM data is accumulated
-        in _audio_frames when _is_recording is True.
+        in _audio_frames when _is_recording is True. Frames are resampled
+        to 16kHz mono to match the WAV header written by save_audio().
 
         Args:
             track: aiortc MediaStreamTrack (audio).
@@ -141,13 +142,30 @@ class WebRTCSession:
                 frame = await track.recv()
 
                 if self._is_recording:
-                    # Convert AudioFrame to raw PCM bytes
-                    # aiortc AudioFrame has .to_ndarray() for PCM data
                     try:
                         nd = frame.to_ndarray()
-                        # Resample to mono 16kHz 16-bit if needed
-                        pcm_bytes = nd.tobytes()
-                        self._audio_frames.append(pcm_bytes)
+                        # aiortc delivers 48kHz stereo by default —
+                        # resample to 16kHz mono 16-bit to match WAV header
+                        import numpy as np
+                        samples = nd.astype(np.float32)
+
+                        # Mix to mono if stereo (shape: channels x samples)
+                        if samples.ndim > 1 and samples.shape[0] > 1:
+                            samples = samples.mean(axis=0)
+                        elif samples.ndim > 1:
+                            samples = samples[0]
+
+                        # Resample from source rate to 16kHz
+                        src_rate = frame.sample_rate if hasattr(frame, "sample_rate") else 48000
+                        if src_rate != _AUDIO_SAMPLE_RATE:
+                            ratio = _AUDIO_SAMPLE_RATE / src_rate
+                            new_len = int(len(samples) * ratio)
+                            indices = np.linspace(0, len(samples) - 1, new_len).astype(np.int64)
+                            samples = samples[indices]
+
+                        # Convert to 16-bit PCM
+                        samples = np.clip(samples, -32768, 32767).astype(np.int16)
+                        self._audio_frames.append(samples.tobytes())
                     except Exception:
                         pass
 
@@ -449,13 +467,28 @@ class WebRTCSignalingHandler:
 async def webrtc_signaling_endpoint(
     websocket: WebSocket,
     handler: WebRTCSignalingHandler,
+    api_key: str | None = None,
 ) -> None:
     """WebSocket endpoint for WebRTC signaling.
 
-    Mounted by main.py at /ws/rtc.
+    Mounted by main.py at /ws/rtc. Supports optional API key auth
+    via query parameter (e.g. /ws/rtc?api_key=xxx).
 
     Args:
         websocket: The active WebSocket connection.
         handler: Instance of WebRTCSignalingHandler.
+        api_key: Optional API key for authentication.
     """
+    if api_key:
+        import hmac
+        client_key = websocket.query_params.get("api_key", "")
+        if not hmac.compare_digest(client_key, api_key):
+            await websocket.accept()
+            await websocket.close(code=4003, reason="Authentication required")
+            logger.warning(
+                "WebRTC auth failed",
+                extra={"client": websocket.client.host if websocket.client else "unknown"},
+            )
+            return
+
     await handler.handle_connection(websocket)
