@@ -64,16 +64,16 @@ def mock_pipeline() -> MagicMock:
     pipeline._tts.is_loaded = True
     pipeline._tts.list_voices.return_value = []
 
-    # Mock health
-    pipeline.health_check.return_value = {
+    # Mock health (async)
+    pipeline.health_check = AsyncMock(return_value={
         "status": "healthy",
         "gpu_available": False,
         "gpu_memory_used_mb": 0.0,
-        "models_loaded": {"asr": True, "tts": True, "emotion": False, "video": False, "upscale": False},
+        "models_loaded": {"asr": True, "tts": True, "emotion": False, "video": False, "upscale": False, "ollama": True},
         "video_enabled": False,
         "upscale_enabled": False,
         "uptime_s": 10.0,
-    }
+    })
 
     return pipeline
 

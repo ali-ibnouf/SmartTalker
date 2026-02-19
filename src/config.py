@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="*", description="CORS allowed origins (comma-separated)")
     api_key: Optional[str] = Field(default=None, description="API key for authentication (optional)")
     rate_limit_per_minute: int = Field(default=60, description="Rate limit per IP per minute")
+    pipeline_timeout: int = Field(default=120, description="Max seconds for a single pipeline request")
 
     # ── ASR (Fun-ASR Nano) ───────────────────────────────────────────────
     asr_model_id: str = Field(
@@ -168,11 +169,19 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_config(self) -> "Settings":
         """Ensure production environment has required security settings."""
-        if self.app_env == "production" and self.api_key is None:
-            raise ValueError(
-                "API_KEY must be set when APP_ENV=production. "
-                "Set API_KEY in your environment or .env file."
-            )
+        if self.app_env == "production":
+            if self.api_key is None:
+                raise ValueError(
+                    "API_KEY must be set when APP_ENV=production. "
+                    "Set API_KEY in your environment or .env file."
+                )
+            if self.debug:
+                import warnings
+                warnings.warn(
+                    "DEBUG=true in production — stack traces will be exposed to clients. "
+                    "Set DEBUG=false for production deployments.",
+                    stacklevel=2,
+                )
         return self
 
     @property
@@ -187,10 +196,18 @@ class Settings(BaseSettings):
         return int(w), int(h)
 
 
+_settings_instance: Settings | None = None
+
+
 def get_settings() -> Settings:
-    """Create and return a cached Settings instance.
+    """Return the singleton Settings instance.
+
+    Creates it on first call, then returns the cached copy.
 
     Returns:
         Settings: Application configuration loaded from environment.
     """
-    return Settings()
+    global _settings_instance
+    if _settings_instance is None:
+        _settings_instance = Settings()
+    return _settings_instance

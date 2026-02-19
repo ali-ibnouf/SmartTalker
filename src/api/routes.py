@@ -6,6 +6,7 @@ list voices, health check, and WebSocket chat.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -55,15 +56,19 @@ async def text_to_speech(
         PipelineResponse with audio_url, response_text, and latency.
     """
     pipeline = request.app.state.pipeline
+    config = request.app.state.config
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        result = await pipeline.process_text(
-            text=body.text,
-            avatar_id=body.avatar_id,
-            voice_id=body.voice_id,
-            emotion=body.emotion,
-            language=body.language,
+        result = await asyncio.wait_for(
+            pipeline.process_text(
+                text=body.text,
+                avatar_id=body.avatar_id,
+                voice_id=body.voice_id,
+                emotion=body.emotion,
+                language=body.language,
+            ),
+            timeout=config.pipeline_timeout,
         )
 
         audio_url = _to_file_url(result.audio_path, request)
@@ -75,6 +80,8 @@ async def text_to_speech(
             breakdown=result.breakdown,
             request_id=request_id,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Pipeline processing timed out")
     except SmartTalkerError as exc:
         raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
 
@@ -108,16 +115,20 @@ async def text_to_video(
         PipelineResponse with audio_url, video_url, response_text, and latency.
     """
     pipeline = request.app.state.pipeline
+    config = request.app.state.config
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        result = await pipeline.process_text(
-            text=body.text,
-            avatar_id=body.avatar_id,
-            voice_id=body.voice_id,
-            emotion=body.emotion,
-            language=body.language,
-            enable_video=True,
+        result = await asyncio.wait_for(
+            pipeline.process_text(
+                text=body.text,
+                avatar_id=body.avatar_id,
+                voice_id=body.voice_id,
+                emotion=body.emotion,
+                language=body.language,
+                enable_video=True,
+            ),
+            timeout=config.pipeline_timeout,
         )
 
         audio_url = _to_file_url(result.audio_path, request)
@@ -131,6 +142,8 @@ async def text_to_video(
             breakdown=result.breakdown,
             request_id=request_id,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Pipeline processing timed out")
     except SmartTalkerError as exc:
         raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
 
@@ -169,18 +182,22 @@ async def audio_chat(
         PipelineResponse with audio_url, response_text, and latency.
     """
     pipeline = request.app.state.pipeline
+    config = request.app.state.config
     request_id = getattr(request.state, "request_id", None)
 
     # Save uploaded audio to temp file
     temp_path = _save_upload(audio, request)
 
     try:
-        result = await pipeline.process_audio(
-            audio_path=str(temp_path),
-            avatar_id=avatar_id,
-            voice_id=voice_id,
-            emotion=emotion,
-            language=language,
+        result = await asyncio.wait_for(
+            pipeline.process_audio(
+                audio_path=str(temp_path),
+                avatar_id=avatar_id,
+                voice_id=voice_id,
+                emotion=emotion,
+                language=language,
+            ),
+            timeout=config.pipeline_timeout,
         )
 
         audio_url = _to_file_url(result.audio_path, request)
@@ -192,6 +209,8 @@ async def audio_chat(
             breakdown=result.breakdown,
             request_id=request_id,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Pipeline processing timed out")
     except SmartTalkerError as exc:
         raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
 
@@ -298,7 +317,7 @@ async def health_check(request: Request) -> HealthResponse:
         HealthResponse with status, GPU info, and loaded models.
     """
     pipeline = request.app.state.pipeline
-    health = pipeline.health_check()
+    health = await pipeline.health_check()
 
     return HealthResponse(**health)
 

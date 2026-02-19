@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from src.utils.exceptions import SmartTalkerError
+from src.utils.ffmpeg import run_ffmpeg as _run_ffmpeg
 from src.utils.logger import setup_logger
 
 logger = setup_logger("utils.video")
@@ -23,45 +24,6 @@ SUPPORTED_IMAGE_FORMATS: set[str] = {"png", "jpg", "jpeg", "webp"}
 MAX_IMAGE_SIZE_MB: int = 10
 MIN_IMAGE_DIMENSION: int = 128
 MAX_IMAGE_DIMENSION: int = 4096
-
-
-def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run an ffmpeg command and return the result.
-
-    Args:
-        args: Command-line arguments for ffmpeg (without 'ffmpeg' prefix).
-
-    Returns:
-        Completed process result.
-
-    Raises:
-        SmartTalkerError: If ffmpeg fails.
-    """
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", *args]
-    try:
-        return subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=120,
-        )
-    except FileNotFoundError:
-        raise SmartTalkerError(
-            message="ffmpeg not found",
-            detail="Install ffmpeg: apt-get install ffmpeg",
-        ) from None
-    except subprocess.CalledProcessError as exc:
-        raise SmartTalkerError(
-            message="ffmpeg command failed",
-            detail=exc.stderr,
-            original_exception=exc,
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise SmartTalkerError(
-            message="ffmpeg command timed out",
-            original_exception=exc,
-        ) from exc
 
 
 def combine_audio_video(

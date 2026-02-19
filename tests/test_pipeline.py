@@ -257,11 +257,86 @@ class TestSmartTalkerPipeline:
         assert pipeline.uptime_seconds >= 0
         assert not pipeline._video_enabled
 
-    def test_health_check(self, config):
+    @pytest.mark.asyncio
+    async def test_health_check(self, config):
         """Health check returns valid structure."""
         from src.pipeline.orchestrator import SmartTalkerPipeline
         pipeline = SmartTalkerPipeline(config)
-        health = pipeline.health_check()
+        health = await pipeline.health_check()
         assert "status" in health
         assert "models_loaded" in health
         assert isinstance(health["models_loaded"], dict)
+        assert "ollama" in health["models_loaded"]
+
+    def test_avatar_path_traversal_blocked(self, config):
+        """Path traversal in avatar_id is rejected."""
+        from src.pipeline.orchestrator import SmartTalkerPipeline
+        assert SmartTalkerPipeline._resolve_avatar_image("../../etc/passwd") is None
+        assert SmartTalkerPipeline._resolve_avatar_image("..\\windows\\system32") is None
+        assert SmartTalkerPipeline._resolve_avatar_image("valid/path") is None  # slash blocked
+        assert SmartTalkerPipeline._resolve_avatar_image("") is None
+
+    def test_avatar_valid_id_no_dir(self, config):
+        """Valid avatar_id with no directory returns None."""
+        from src.pipeline.orchestrator import SmartTalkerPipeline
+        assert SmartTalkerPipeline._resolve_avatar_image("nonexistent") is None
+
+
+# =============================================================================
+# LLM Session Lock Tests
+# =============================================================================
+
+
+class TestLLMSessionLock:
+    """Tests for async session management with lock."""
+
+    @pytest.mark.asyncio
+    async def test_get_session_creates_new(self, config):
+        """_get_session creates new session for unknown ID."""
+        from src.pipeline.llm import LLMEngine
+        engine = LLMEngine(config)
+        session = await engine._get_session("new-session")
+        assert session is not None
+        assert len(session.history) == 0
+
+    @pytest.mark.asyncio
+    async def test_get_session_returns_existing(self, config):
+        """_get_session returns same session for same ID."""
+        from src.pipeline.llm import LLMEngine
+        engine = LLMEngine(config)
+        s1 = await engine._get_session("test-id")
+        s1.history.append({"role": "user", "content": "hello"})
+        s2 = await engine._get_session("test-id")
+        assert len(s2.history) == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_session_access(self, config):
+        """Multiple concurrent _get_session calls don't corrupt state."""
+        import asyncio
+        from src.pipeline.llm import LLMEngine
+        engine = LLMEngine(config)
+
+        async def access_session(sid):
+            session = await engine._get_session(sid)
+            session.history.append({"role": "user", "content": f"msg-{sid}"})
+
+        await asyncio.gather(*[access_session(f"s{i}") for i in range(20)])
+        assert len(engine._sessions) == 20
+
+
+# =============================================================================
+# Config Singleton Tests
+# =============================================================================
+
+
+class TestConfigSingleton:
+    """Tests for Settings singleton behavior."""
+
+    def test_get_settings_returns_same_instance(self):
+        """get_settings returns cached singleton."""
+        import src.config as cfg_module
+        cfg_module._settings_instance = None  # Reset
+        s1 = cfg_module.get_settings()
+        s2 = cfg_module.get_settings()
+        assert s1 is s2
+        cfg_module._settings_instance = None  # Cleanup

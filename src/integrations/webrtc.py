@@ -294,7 +294,24 @@ class WebRTCSignalingHandler:
 
                 elif msg_type == "ice_candidate":
                     candidate = message.get("candidate")
-                    logger.debug(f"Received ICE candidate: {candidate}")
+                    if candidate and AIORTC_AVAILABLE:
+                        try:
+                            from aiortc import RTCIceCandidate
+                            # Parse candidate fields from signaling message
+                            sdp_mid = message.get("sdpMid", "")
+                            sdp_mline_index = message.get("sdpMLineIndex", 0)
+                            await pc.addIceCandidate(
+                                RTCIceCandidate(
+                                    sdpMid=sdp_mid,
+                                    sdpMLineIndex=sdp_mline_index,
+                                    candidate=candidate,
+                                )
+                            )
+                            logger.debug(f"Added ICE candidate: {candidate[:60]}")
+                        except Exception as ice_exc:
+                            logger.warning(f"Failed to add ICE candidate: {ice_exc}")
+                    else:
+                        logger.debug(f"Received ICE candidate (ignored): {candidate}")
 
                 elif msg_type == "process":
                     await self._handle_process(session, websocket, message)

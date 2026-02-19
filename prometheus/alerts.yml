@@ -45,3 +45,30 @@ groups:
         annotations:
           summary: "Redis is down"
           description: "Redis exporter reports redis_up == 0 for 2 minutes."
+
+      - alert: HighInferenceLatency
+        expr: histogram_quantile(0.95, rate(smarttalker_inference_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High inference latency (p95 > 30s) for {{ $labels.model_type }}"
+          description: "The 95th percentile inference latency for {{ $labels.model_type }} is {{ $value | humanizeDuration }}."
+
+      - alert: PipelineErrorRate
+        expr: rate(http_request_duration_seconds_count{status="500"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated pipeline error rate on SmartTalker"
+          description: "More than 0.1 req/s returning HTTP 500 over the last 5 minutes."
+
+      - alert: GPUMemoryExhausted
+        expr: smarttalker_gpu_memory_bytes > 20e9
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GPU memory usage above 20GB"
+          description: "SmartTalker GPU memory is at {{ $value | humanize1024 }}B — risk of OOM."

@@ -11,10 +11,11 @@ Audit fixes applied:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import AsyncGenerator, Optional
+from typing import Optional
 
 import httpx
 
@@ -111,6 +112,7 @@ class LLMEngine:
 
         # Per-session conversation histories
         self._sessions: dict[str, _SessionState] = {}
+        self._session_lock = asyncio.Lock()
 
         # Reusable async HTTP client
         self._client: Optional[httpx.AsyncClient] = None
@@ -126,31 +128,33 @@ class LLMEngine:
 
     # ── Session management ───────────────────────────────────────────────
 
-    def _get_session(self, session_id: str) -> _SessionState:
+    async def _get_session(self, session_id: str) -> _SessionState:
         """Get or create a session state.
 
         Also prunes expired sessions periodically.
+        Uses an asyncio.Lock to prevent concurrent dict mutation.
         """
         now = time.time()
 
-        # Prune expired sessions every 100th access
-        if len(self._sessions) > 50:
-            expired = [
-                sid for sid, state in self._sessions.items()
-                if now - state.last_access > _SESSION_TTL
-            ]
-            for sid in expired:
-                del self._sessions[sid]
+        async with self._session_lock:
+            # Prune expired sessions when dict grows large
+            if len(self._sessions) > 50:
+                expired = [
+                    sid for sid, state in self._sessions.items()
+                    if now - state.last_access > _SESSION_TTL
+                ]
+                for sid in expired:
+                    del self._sessions[sid]
 
-        if session_id not in self._sessions:
-            self._sessions[session_id] = _SessionState(
-                history=deque(maxlen=self._max_history * 2),
-                last_access=now,
-            )
+            if session_id not in self._sessions:
+                self._sessions[session_id] = _SessionState(
+                    history=deque(maxlen=self._max_history * 2),
+                    last_access=now,
+                )
 
-        session = self._sessions[session_id]
-        session.last_access = now
-        return session
+            session = self._sessions[session_id]
+            session.last_access = now
+            return session
 
     def clear_session(self, session_id: str) -> None:
         """Clear conversation history for a specific session.
@@ -216,8 +220,8 @@ class LLMEngine:
         user_text: str,
         emotion: str = "neutral",
         language: str = "ar",
-        session_id: str = "default",
         conversation_history: Optional[list[dict[str, str]]] = None,
+        session_history: Optional[deque] = None,
     ) -> list[dict[str, str]]:
         """Build the message array for the Ollama API.
 
@@ -225,8 +229,8 @@ class LLMEngine:
             user_text: The user's input text.
             emotion: Emotion label for prompt adjustment.
             language: Target language ("ar" or "en").
-            session_id: Session identifier for history lookup.
             conversation_history: Optional external history override.
+            session_history: Pre-fetched session history deque.
 
         Returns:
             List of message dicts with role and content.
@@ -246,9 +250,8 @@ class LLMEngine:
         # Add conversation history (session-specific)
         if conversation_history is not None:
             messages.extend(conversation_history)
-        else:
-            session = self._get_session(session_id)
-            messages.extend(list(session.history))
+        elif session_history is not None:
+            messages.extend(list(session_history))
 
         # Add current user message
         messages.append({"role": "user", "content": user_text})
@@ -285,7 +288,13 @@ class LLMEngine:
 
         self._check_circuit_breaker()
 
-        messages = self._build_messages(user_text, emotion, language, session_id, conversation_history)
+        # Fetch session history before building messages (async lock)
+        session = await self._get_session(session_id)
+        messages = self._build_messages(
+            user_text, emotion, language,
+            conversation_history=conversation_history,
+            session_history=session.history,
+        )
         start = time.perf_counter()
 
         try:
@@ -340,8 +349,7 @@ class LLMEngine:
         response_text = self._extract_text(data)
         tokens_used = self._extract_tokens(data)
 
-        # Update session-specific history
-        session = self._get_session(session_id)
+        # Update session-specific history (session already fetched above)
         session.history.append({"role": "user", "content": user_text})
         session.history.append({"role": "assistant", "content": response_text})
 
@@ -364,99 +372,6 @@ class LLMEngine:
             },
         )
         return result
-
-    # ── Streaming generation ─────────────────────────────────────────────
-
-    async def generate_stream(
-        self,
-        user_text: str,
-        emotion: str = "neutral",
-        language: str = "ar",
-        session_id: str = "default",
-    ) -> AsyncGenerator[str, None]:
-        """Generate a streaming response from the LLM.
-
-        Yields text chunks as they arrive from Ollama.
-
-        Args:
-            user_text: The user's input text.
-            emotion: Emotion context for response adjustment.
-            language: Target response language ("ar" or "en").
-            session_id: Session identifier for conversation isolation.
-
-        Yields:
-            Text chunks as strings.
-
-        Raises:
-            LLMError: If the streaming request fails.
-        """
-        if not user_text.strip():
-            raise LLMError(message="User text cannot be empty")
-
-        self._check_circuit_breaker()
-
-        messages = self._build_messages(user_text, emotion, language, session_id)
-        full_response: list[str] = []
-
-        try:
-            client = await self._get_client()
-            async with client.stream(
-                "POST",
-                "/api/chat",
-                json={
-                    "model": self._model,
-                    "messages": messages,
-                    "stream": True,
-                    "options": {
-                        "temperature": self._temperature,
-                        "num_predict": self._max_tokens,
-                    },
-                },
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
-                    try:
-                        import json
-                        chunk_data = json.loads(line)
-                        content = chunk_data.get("message", {}).get("content", "")
-                        if content:
-                            full_response.append(content)
-                            yield content
-                    except (ValueError, KeyError):
-                        continue
-
-        except httpx.ConnectError as exc:
-            self._record_failure()
-            raise LLMError(
-                message="Cannot connect to Ollama for streaming",
-                detail=f"Is Ollama running at {self._base_url}?",
-                original_exception=exc,
-            ) from exc
-        except httpx.TimeoutException as exc:
-            self._record_failure()
-            raise LLMError(
-                message="LLM streaming timed out",
-                original_exception=exc,
-            ) from exc
-        except LLMError:
-            raise
-        except Exception as exc:
-            self._record_failure()
-            raise LLMError(
-                message="LLM streaming failed",
-                detail=str(exc),
-                original_exception=exc,
-            ) from exc
-
-        self._record_success()
-
-        # Update session history after streaming completes
-        joined = "".join(full_response)
-        session = self._get_session(session_id)
-        session.history.append({"role": "user", "content": user_text})
-        session.history.append({"role": "assistant", "content": joined})
 
     # ── Response parsing ─────────────────────────────────────────────────
 

@@ -101,6 +101,20 @@ class SmartTalkerPipeline:
         # GPU concurrency semaphore — limits parallel GPU inferences
         self._gpu_semaphore = asyncio.Semaphore(_DEFAULT_GPU_CONCURRENCY)
 
+        # Enforce GPU memory fraction limit
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.set_per_process_memory_fraction(
+                    config.gpu_memory_fraction
+                )
+                logger.info(
+                    "GPU memory fraction set",
+                    extra={"fraction": config.gpu_memory_fraction},
+                )
+        except (ImportError, RuntimeError) as exc:
+            logger.debug(f"Could not set GPU memory fraction: {exc}")
+
         logger.info(
             "SmartTalkerPipeline initialized",
             extra={
@@ -165,6 +179,7 @@ class SmartTalkerPipeline:
         """Run a sync GPU-bound function in a thread pool, guarded by semaphore.
 
         Prevents event-loop blocking and limits GPU concurrency.
+        Updates GPU_QUEUE_DEPTH metric to track waiting tasks.
 
         Args:
             fn: Synchronous callable to execute.
@@ -174,11 +189,19 @@ class SmartTalkerPipeline:
         Returns:
             Return value of fn.
         """
+        # Track how many tasks are waiting for the GPU
+        waiting = _DEFAULT_GPU_CONCURRENCY - self._gpu_semaphore._value
+        GPU_QUEUE_DEPTH.set(waiting)
+
         loop = asyncio.get_running_loop()
         async with self._gpu_semaphore:
-            return await loop.run_in_executor(
-                None, functools.partial(fn, *args, **kwargs)
-            )
+            GPU_QUEUE_DEPTH.set(_DEFAULT_GPU_CONCURRENCY - self._gpu_semaphore._value)
+            try:
+                return await loop.run_in_executor(
+                    None, functools.partial(fn, *args, **kwargs)
+                )
+            finally:
+                GPU_QUEUE_DEPTH.set(_DEFAULT_GPU_CONCURRENCY - self._gpu_semaphore._value)
 
     # ═════════════════════════════════════════════════════════════════════
     # Text Pipeline
@@ -229,7 +252,7 @@ class SmartTalkerPipeline:
         breakdown["llm_ms"] = llm_result.latency_ms
 
         # Update Request Metrics
-        ACTIVE_SESSIONS.set(len(self._llm._history)) # Approximation
+        ACTIVE_SESSIONS.set(len(self._llm._sessions))
         try:
             import torch
             if torch.cuda.is_available():
@@ -409,7 +432,7 @@ class SmartTalkerPipeline:
 
             return video_result.video_path
 
-        except SmartTalkerError as exc:
+        except PipelineError as exc:
             logger.error(f"Video generation failed: {exc.message}")
             return None
 
@@ -474,7 +497,19 @@ class SmartTalkerPipeline:
         Returns:
             Path to the reference image, or None if not found.
         """
+        # Reject path traversal characters
+        if not avatar_id or "/" in avatar_id or "\\" in avatar_id or ".." in avatar_id:
+            logger.warning("Invalid avatar_id rejected", extra={"avatar_id": avatar_id})
+            return None
+
         avatar_dir = DEFAULT_AVATAR_DIR / avatar_id
+
+        # Verify resolved path stays inside the avatars directory
+        try:
+            avatar_dir.resolve().relative_to(DEFAULT_AVATAR_DIR.resolve())
+        except ValueError:
+            logger.warning("Avatar path traversal blocked", extra={"avatar_id": avatar_id})
+            return None
 
         if not avatar_dir.exists():
             return None
@@ -493,11 +528,11 @@ class SmartTalkerPipeline:
 
         return None
 
-    def health_check(self) -> dict[str, Any]:
-        """Check system health and model status.
+    async def health_check(self) -> dict[str, Any]:
+        """Check system health, model status, and Ollama connectivity.
 
         Returns:
-            Dictionary with status, GPU availability, and loaded models.
+            Dictionary with status, GPU availability, loaded models, and Ollama reachability.
         """
         gpu_available = False
         gpu_memory_used_mb = 0.0
@@ -512,15 +547,25 @@ class SmartTalkerPipeline:
         except ImportError:
             pass
 
+        # Check Ollama connectivity
+        ollama_reachable = False
+        try:
+            client = await self._llm._get_client()
+            resp = await client.get("/api/tags")
+            ollama_reachable = resp.status_code == 200
+        except Exception:
+            ollama_reachable = False
+
         models_loaded = {
             "asr": self._asr.is_loaded,
             "tts": self._tts.is_loaded,
             "emotion": self._emotion.is_loaded,
             "video": self._video.is_loaded,
             "upscale": self._upscale.is_loaded,
+            "ollama": ollama_reachable,
         }
 
-        all_ok = any(models_loaded.values())
+        all_ok = any(models_loaded.values()) and ollama_reachable
         status = "healthy" if all_ok else "degraded"
 
         return {

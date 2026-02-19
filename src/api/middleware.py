@@ -9,6 +9,7 @@ SecurityHeadersMiddleware: injects security headers on every response.
 
 from __future__ import annotations
 
+import hmac
 import time
 import uuid
 from typing import Any, Optional
@@ -153,9 +154,9 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
                 APIKeyAuthMiddleware._dev_warning_logged = True
             return await call_next(request)
 
-        # Validate key
-        client_key = request.headers.get("X-API-Key")
-        if client_key != self.config.api_key:
+        # Validate key (constant-time comparison to prevent timing attacks)
+        client_key = request.headers.get("X-API-Key", "")
+        if not hmac.compare_digest(client_key, self.config.api_key):
             return JSONResponse(
                 status_code=403,
                 content={"detail": "Invalid or missing API Key"},
@@ -189,6 +190,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 t for t in self._requests[client_ip]
                 if now - t < 60.0
             ]
+
+        # Prune stale IPs with no recent requests
+        if len(self._requests) > 500:
+            stale = [ip for ip, ts in self._requests.items() if not ts]
+            for ip in stale:
+                del self._requests[ip]
 
         # Check limit
         current_count = len(self._requests.get(client_ip, []))
@@ -252,6 +259,12 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
                 if now - t < 60.0
             ]
 
+        # Prune stale IPs with no recent requests (every 500 IPs)
+        if len(self._requests) > 500:
+            stale = [ip for ip, ts in self._requests.items() if not ts]
+            for ip in stale:
+                del self._requests[ip]
+
         current_count = len(self._requests.get(client_ip, []))
         if current_count >= self.limit:
             return False, current_count
@@ -260,6 +273,15 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
             self._requests[client_ip] = []
         self._requests[client_ip].append(now)
         return True, current_count + 1
+
+    def _resolve_redis(self, request: Request) -> Optional[Any]:
+        """Resolve Redis client — prefer constructor arg, then app.state."""
+        if self.redis:
+            return self.redis
+        try:
+            return request.app.state.redis
+        except AttributeError:
+            return None
 
     async def dispatch(
         self,
@@ -272,9 +294,12 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
 
+        redis = self._resolve_redis(request)
         allowed = True
-        if self.redis:
+        if redis:
             try:
+                # Use resolved redis instead of self.redis
+                self.redis = redis
                 allowed, _ = await self._check_redis(client_ip, now)
             except Exception:
                 if not RedisRateLimitMiddleware._fallback_warned:

@@ -7,6 +7,7 @@ Run with: uvicorn src.main:app --host 0.0.0.0 --port 8000
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
@@ -19,7 +20,6 @@ from fastapi.staticfiles import StaticFiles
 from src.api.middleware import (
     APIKeyAuthMiddleware,
     LoggingMiddleware,
-    RateLimitMiddleware,
     RedisRateLimitMiddleware,
     RequestIDMiddleware,
     SecurityHeadersMiddleware,
@@ -33,6 +33,7 @@ from src.pipeline.orchestrator import SmartTalkerPipeline
 from src.utils.exceptions import SmartTalkerError
 from src.utils.logger import setup_logger
 from src.integrations.whatsapp import WhatsAppClient
+from src.integrations.storage import StorageManager
 from src.integrations.webrtc import WebRTCSignalingHandler, webrtc_signaling_endpoint
 
 logger = setup_logger("main")
@@ -101,8 +102,26 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning(f"Some models failed to load: {exc}")
 
+    # Initialize storage manager and schedule periodic cleanup
+    storage = StorageManager(config)
+    application.state.storage = storage
+
     # Ensure static files directory exists
     config.static_files_dir.mkdir(parents=True, exist_ok=True)
+
+    # Background cleanup task — runs every hour
+    async def _periodic_cleanup():
+        import asyncio as _asyncio
+        while True:
+            await _asyncio.sleep(3600)
+            try:
+                deleted = storage.cleanup_old_files()
+                if deleted:
+                    logger.info("Periodic cleanup", extra={"deleted": deleted})
+            except Exception as exc:
+                logger.warning(f"Periodic cleanup failed: {exc}")
+
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
 
     logger.info(
         "SmartTalker ready",
@@ -113,6 +132,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
     # ── Shutdown ─────────────────────────────────────────────────────────
     logger.info("SmartTalker shutting down...")
+    cleanup_task.cancel()
     await pipeline.unload_all()
     await whatsapp.close()
     if redis_client:

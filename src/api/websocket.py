@@ -619,7 +619,7 @@ class WebSocketManager:
     async def _send_json(websocket: WebSocket, data: dict[str, Any]) -> None:
         """Send a JSON message to a WebSocket client.
 
-        Silently ignores send failures on already-closed connections.
+        Logs send failures at debug level instead of silently swallowing.
 
         Args:
             websocket: Target WebSocket connection.
@@ -628,8 +628,8 @@ class WebSocketManager:
         try:
             if websocket.client_state == WebSocketState.CONNECTED:
                 await websocket.send_json(data)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"WebSocket send failed: {exc}")
 
     @staticmethod
     async def _send_error(
@@ -650,8 +650,8 @@ class WebSocketManager:
                 if detail:
                     msg["detail"] = detail
                 await websocket.send_json(msg)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"WebSocket error send failed: {exc}")
 
 
 # ═════════════════════════════════════════════════════════════════════════

@@ -355,3 +355,63 @@ class TestStorageStats:
         stats = StorageStats(total_files=42, total_size_mb=128.5, oldest_file_age_hours=12.3)
         assert stats.total_files == 42
         assert stats.total_size_mb == 128.5
+
+
+# =============================================================================
+# Shared FFmpeg Utility Tests
+# =============================================================================
+
+
+class TestSharedFFmpeg:
+    """Tests for the shared ffmpeg runner module."""
+
+    def test_run_ffmpeg_import(self):
+        """Shared run_ffmpeg can be imported."""
+        from src.utils.ffmpeg import run_ffmpeg, run_ffprobe
+        assert callable(run_ffmpeg)
+        assert callable(run_ffprobe)
+
+    def test_audio_uses_shared_ffmpeg(self):
+        """audio.py imports _run_ffmpeg from shared module."""
+        from src.utils import audio
+        from src.utils.ffmpeg import run_ffmpeg
+        assert audio._run_ffmpeg is run_ffmpeg
+
+    def test_video_uses_shared_ffmpeg(self):
+        """video.py imports _run_ffmpeg from shared module."""
+        from src.utils import video
+        from src.utils.ffmpeg import run_ffmpeg
+        assert video._run_ffmpeg is run_ffmpeg
+
+    def test_run_ffmpeg_not_found_raises(self):
+        """run_ffmpeg raises SmartTalkerError when ffmpeg not found."""
+        from unittest.mock import patch
+        from src.utils.ffmpeg import run_ffmpeg
+        from src.utils.exceptions import SmartTalkerError
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            with pytest.raises(SmartTalkerError, match="ffmpeg not found"):
+                run_ffmpeg(["-version"])
+
+
+# =============================================================================
+# Rate Limiter IP Pruning Tests
+# =============================================================================
+
+
+class TestRateLimiterPruning:
+    """Tests for in-memory rate limiter stale IP cleanup."""
+
+    def test_stale_ips_pruned(self, config):
+        """IPs with empty timestamp lists are pruned when dict grows large."""
+        from src.api.middleware import RedisRateLimitMiddleware
+        middleware = RedisRateLimitMiddleware(app=MagicMock(), config=config)
+
+        # Populate with 600 stale IPs (empty lists)
+        for i in range(600):
+            middleware._requests[f"192.168.1.{i}"] = []
+
+        # Run a check which should trigger pruning
+        allowed, count = middleware._check_memory("10.0.0.1", time.time())
+        assert allowed
+        # All stale IPs should have been pruned
+        assert len(middleware._requests) < 100
