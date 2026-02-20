@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-171%20passed-brightgreen.svg)]()
+[![CI](https://github.com/ali-ibnouf/SmartTalker/actions/workflows/tests.yml/badge.svg)](https://github.com/ali-ibnouf/SmartTalker/actions/workflows/tests.yml)
 
 **Digital Human AI Agent Platform — Arabic-First, Open-Source AI Stack**
 
