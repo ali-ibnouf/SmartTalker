@@ -115,7 +115,7 @@ def setup_logger(
 
     formatter = SmartTalkerJsonFormatter(
         fmt="%(timestamp)s %(level)s %(module)s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S.%f",
+        datefmt="%Y-%m-%dT%H:%M:%S",
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
