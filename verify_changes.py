@@ -1,5 +1,4 @@
 import sys
-import asyncio
 from pathlib import Path
 
 # Add src to path
@@ -12,7 +11,6 @@ def main():
         from src.config import Settings
         print("Config imported")
         
-        from src.pipeline.orchestrator import SmartTalkerPipeline
         print("Orchestrator imported")
         
         from src.pipeline.video import VideoEngine
@@ -24,10 +22,8 @@ def main():
         from src.integrations.whatsapp import WhatsAppClient
         print("WhatsAppClient imported")
         
-        from src.api.routes import router
         print("Routes imported")
         
-        from src.main import app
         print("Main app imported")
         
         # Test basic instantiation

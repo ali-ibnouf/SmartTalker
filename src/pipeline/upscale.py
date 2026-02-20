@@ -7,12 +7,11 @@ production-grade digital human output.
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.config import Settings
 from src.utils.exceptions import UpscaleError

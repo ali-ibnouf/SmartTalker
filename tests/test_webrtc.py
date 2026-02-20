@@ -1,5 +1,4 @@
 import sys
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 import pytest
 from fastapi import WebSocket, WebSocketDisconnect

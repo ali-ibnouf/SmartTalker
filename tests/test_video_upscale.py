@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.utils.exceptions import VideoError, UpscaleError
+from src.utils.exceptions import VideoError
 
 @pytest.fixture(autouse=True)
 def mock_dependencies():

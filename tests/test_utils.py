@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -199,7 +198,7 @@ class TestLogger:
 
     def test_log_with_latency(self):
         """log_with_latency calls the logger without raising."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
         from src.utils.logger import log_with_latency
         mock_logger = MagicMock()
         log_with_latency(mock_logger, "Test operation", 42.5)
@@ -634,7 +633,6 @@ class TestRateLimitRedisParam:
     async def test_check_redis_uses_param(self, config):
         """_check_redis should use the redis parameter, not self.redis."""
         from src.api.middleware import RedisRateLimitMiddleware
-        import asyncio
 
         middleware = RedisRateLimitMiddleware(app=MagicMock(), config=config)
         assert middleware.redis is None  # no redis set on self

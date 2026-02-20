@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from src.config import Settings
 from src.utils.exceptions import ASRError

@@ -230,7 +230,6 @@ class VideoEngine:
         Raises:
             VideoError: If inference fails.
         """
-        import subprocess
         import asyncio
 
         model_dir = self._model["model_dir"]

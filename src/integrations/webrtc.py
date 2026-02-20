@@ -18,7 +18,6 @@ Audio Flow:
 from __future__ import annotations
 
 import asyncio
-import time
 import uuid
 import wave
 from dataclasses import dataclass, field
@@ -29,7 +28,6 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from src.config import Settings
 from src.pipeline.orchestrator import SmartTalkerPipeline
-from src.utils.exceptions import WebRTCError
 from src.utils.logger import setup_logger
 
 logger = setup_logger("integrations.webrtc")

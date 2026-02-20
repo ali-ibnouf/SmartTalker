@@ -6,11 +6,9 @@ and storage statistics for generated audio/video files.
 
 from __future__ import annotations
 
-import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from src.config import Settings
 from src.utils.logger import setup_logger

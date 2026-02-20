@@ -1,7 +1,6 @@
 """Tests for SmartTalker WebSocket chat endpoint."""
 
-import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI, WebSocket

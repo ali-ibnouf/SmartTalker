@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from src.config import Settings
 from src.utils.logger import setup_logger, log_with_latency
