@@ -2,9 +2,25 @@
 
 # 🗣️ SmartTalker
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![Tests](https://img.shields.io/badge/tests-171%20passed-brightgreen.svg)]()
+
 **Digital Human AI Agent Platform — Arabic-First, Open-Source AI Stack**
 
-A real-time talking avatar system that converts speech input into video output, built entirely with Chinese open-source AI tools. Designed for MENA markets with Arabic as the primary language.
+SmartTalker is an end-to-end platform for building real-time digital human AI agents. It takes speech or text input and produces a talking avatar video response — powered entirely by open-source AI models. The platform is designed with Arabic as the primary language, targeting MENA markets, but supports multilingual use cases out of the box.
+
+### Key Features
+
+- **Full Speech Pipeline** — ASR, LLM reasoning, TTS, and talking-head video generation in a single API call
+- **Arabic-First** — Native Arabic support across all pipeline layers (ASR, LLM, TTS)
+- **Real-Time Communication** — REST API, WebSocket, and WebRTC interfaces for flexible integration
+- **WhatsApp Integration** — Built-in WhatsApp Business API client for conversational AI over messaging
+- **Voice Cloning** — Clone voices from 3–10 second reference audio samples
+- **Emotion-Aware** — Detects and applies emotion to both speech synthesis and avatar animation
+- **Production-Ready** — Redis rate limiting, API key auth, Prometheus metrics, Docker deployment, and structured JSON logging
+- **Cost-Efficient** — Runs on a single GPU server at $50–150/month using fully open-source models
 
 > **First Client:** BusTickets Pro — WhatsApp bus booking assistant
 > **Cost Target:** $50–150/month operational
@@ -58,7 +74,7 @@ SmartTalker uses a 6-layer pipeline architecture:
 ### Option 1: One-Click Setup (Recommended)
 
 ```bash
-git clone https://github.com/<your-org>/SmartTalker.git
+git clone https://github.com/ali-ibnouf/SmartTalker.git
 cd SmartTalker
 chmod +x setup.sh
 sudo ./setup.sh
@@ -68,7 +84,7 @@ sudo ./setup.sh
 
 ```bash
 # Clone the repo
-git clone https://github.com/<your-org>/SmartTalker.git
+git clone https://github.com/ali-ibnouf/SmartTalker.git
 cd SmartTalker
 
 # Configure environment
@@ -219,7 +235,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ```bash
 # استنساخ المشروع
-git clone https://github.com/<your-org>/SmartTalker.git
+git clone https://github.com/ali-ibnouf/SmartTalker.git
 cd SmartTalker
 
 # الإعداد التلقائي
