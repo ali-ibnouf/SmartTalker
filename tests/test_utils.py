@@ -224,7 +224,7 @@ class TestStorageManager:
     def test_init_creates_subdirs(self, config):
         """Initialization creates required subdirectories."""
         from src.integrations.storage import StorageManager
-        manager = StorageManager(config)
+        StorageManager(config)
         base = config.storage_base_dir
         for subdir in ["tts", "video", "upscale", "uploads", "whatsapp_media"]:
             assert (base / subdir).is_dir()
@@ -312,7 +312,7 @@ class TestStorageManager:
         recent_file = config.storage_base_dir / "tts" / "recent.wav"
         recent_file.write_bytes(b"\x00" * 100)
 
-        deleted = manager.cleanup_old_files()
+        manager.cleanup_old_files()
         assert recent_file.exists()
 
     def test_clear_all(self, config):

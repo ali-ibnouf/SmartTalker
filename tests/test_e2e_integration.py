@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 from src.main import app
 
 @pytest.fixture
@@ -8,7 +8,7 @@ def client():
     # Mock external services before app startup
     with patch("src.main.SmartTalkerPipeline") as MockPipeline, \
          patch("src.main.WhatsAppClient") as MockWhatsApp, \
-         patch("src.main.StorageManager") as MockStorage, \
+         patch("src.main.StorageManager"), \
          patch("redis.asyncio.from_url") as MockRedis:
 
         # Setup mocks — return values must match Pydantic schema fields

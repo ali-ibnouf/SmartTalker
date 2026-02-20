@@ -44,7 +44,7 @@ try:
         RTCConfiguration,
         RTCIceServer,
     )
-    from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
+    from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay  # noqa: F401
     AIORTC_AVAILABLE = True
 except ImportError:
     AIORTC_AVAILABLE = False

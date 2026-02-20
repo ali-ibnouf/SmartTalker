@@ -88,8 +88,8 @@ class VideoEngine:
         start = time.perf_counter()
         try:
             import torch
-            from diffusers import AutoencoderKL, DDIMScheduler  # type: ignore[import-untyped]
-            from transformers import CLIPVisionModelWithProjection  # type: ignore[import-untyped]
+            from diffusers import AutoencoderKL, DDIMScheduler  # type: ignore[import-untyped]  # noqa: F401
+            from transformers import CLIPVisionModelWithProjection  # type: ignore[import-untyped]  # noqa: F401
 
             model_dir = Path(self._config.video_model_dir) / "echomimic_v2"
             if not model_dir.exists():

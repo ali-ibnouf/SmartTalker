@@ -36,7 +36,7 @@ def env_override(tmp_path: Path) -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def config() -> "Settings":
+def config():
     """Create a test Settings instance."""
     from src.config import Settings
     return Settings()

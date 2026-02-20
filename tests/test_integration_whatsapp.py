@@ -84,8 +84,9 @@ class TestWhatsAppClient:
             
             assert mock_client.post.call_count == 2
 
-from src.api.routes import _build_public_audio_url, _process_whatsapp_payload
-from pathlib import Path
+from pathlib import Path  # noqa: E402
+
+from src.api.routes import _build_public_audio_url, _process_whatsapp_payload  # noqa: E402
 
 class TestAudioUrlBuilder:
     """Tests for audio URL construction."""

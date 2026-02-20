@@ -128,7 +128,7 @@ class TestLLMEngine:
 
     def test_extract_text_empty_raises(self, config):
         """Empty response raises LLMError."""
-        from src.pipeline.llm import LLMEngine, LLMError
+        from src.pipeline.llm import LLMEngine
         from src.utils.exceptions import LLMError
         data = {"message": {"content": ""}}
         with pytest.raises(LLMError, match="Empty response"):
