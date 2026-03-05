@@ -102,10 +102,6 @@ clean: ## Remove generated files, caches, and containers
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@echo "✅ Clean complete"
 
-ollama-pull: ## Pull the Qwen model into Ollama
-	@echo "📥 Pulling Qwen 2.5 14B model..."
-	docker exec smarttalker-ollama ollama pull qwen2.5:14b
-
 # ---------------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------------

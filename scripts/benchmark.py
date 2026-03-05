@@ -36,7 +36,7 @@ def format_latency(values: list[float]) -> str:
 
 async def benchmark_llm(iterations: int = 5) -> Optional[list[float]]:
     """Benchmark LLM generation latency."""
-    benchmark_section("LLM (Qwen 2.5 via Ollama)")
+    benchmark_section("LLM (Qwen via DashScope)")
 
     try:
         from src.config import get_settings
@@ -147,7 +147,6 @@ async def benchmark_pipeline(iterations: int = 3) -> Optional[list[float]]:
                 result = await pipeline.process_text(
                     text=prompt,
                     language="en",
-                    enable_video=False,
                 )
                 elapsed = (time.perf_counter() - start) * 1000
                 latencies.append(elapsed)

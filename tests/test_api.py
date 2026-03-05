@@ -175,8 +175,7 @@ class TestSchemas:
         from src.api.schemas import HealthResponse
         health = HealthResponse(
             status="healthy",
-            gpu_available=True,
-            gpu_memory_used_mb=1024.0,
+            models_loaded={"asr": True, "llm": True},
         )
         assert health.status == "healthy"
-        assert health.gpu_available is True
+        assert health.models_loaded["asr"] is True

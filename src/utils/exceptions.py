@@ -1,7 +1,7 @@
 """Custom exception hierarchy for SmartTalker.
 
 Base: SmartTalkerError. Layer-specific: ASRError, LLMError,
-TTSError, VideoError, UpscaleError, StorageError,
+TTSError, StorageError,
 WhatsAppError, WebSocketError.
 """
 
@@ -66,7 +66,7 @@ class SmartTalkerError(Exception):
 class PipelineError(SmartTalkerError):
     """Base error for all pipeline-layer failures.
 
-    Catches ASR, LLM, TTS, Video, and Upscale errors uniformly.
+    Catches ASR, LLM, and TTS errors uniformly.
     """
 
     def __init__(
@@ -95,9 +95,9 @@ class ASRError(PipelineError):
 
 
 class LLMError(PipelineError):
-    """Error during Large Language Model inference (Qwen/Ollama).
+    """Error during Large Language Model inference (Qwen via DashScope).
 
-    Raised when: Ollama is unreachable, model is not loaded,
+    Raised when: API is unreachable, model is not available,
     generation times out, or response is malformed.
     """
 
@@ -120,38 +120,6 @@ class TTSError(PipelineError):
     def __init__(
         self,
         message: str = "TTS synthesis failed",
-        detail: Optional[Any] = None,
-        original_exception: Optional[Exception] = None,
-    ) -> None:
-        super().__init__(message=message, detail=detail, original_exception=original_exception)
-
-
-class VideoError(PipelineError):
-    """Error during video generation (EchoMimicV2).
-
-    Raised when: model loading fails, reference image is invalid,
-    audio mismatch, or rendering fails.
-    """
-
-    def __init__(
-        self,
-        message: str = "Video generation failed",
-        detail: Optional[Any] = None,
-        original_exception: Optional[Exception] = None,
-    ) -> None:
-        super().__init__(message=message, detail=detail, original_exception=original_exception)
-
-
-class UpscaleError(PipelineError):
-    """Error during video upscaling (RealESRGAN/CodeFormer).
-
-    Raised when: model loading fails, input video is corrupt,
-    or enhancement process fails.
-    """
-
-    def __init__(
-        self,
-        message: str = "Upscale processing failed",
         detail: Optional[Any] = None,
         original_exception: Optional[Exception] = None,
     ) -> None:
@@ -215,6 +183,118 @@ class WebRTCError(SmartTalkerError):
     def __init__(
         self,
         message: str = "WebRTC error",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class KnowledgeBaseError(PipelineError):
+    """Error during Knowledge Base / RAG operations.
+
+    Raised when: document ingestion fails, embedding generation fails,
+    vector search fails, or ChromaDB is unavailable.
+    """
+
+    def __init__(
+        self,
+        message: str = "Knowledge Base operation failed",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class TrainingError(PipelineError):
+    """Error during Training Engine operations.
+
+    Raised when: skill tracking fails, learning pipeline fails,
+    or escalation logic encounters an error.
+    """
+
+    def __init__(
+        self,
+        message: str = "Training operation failed",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class GuardrailsError(PipelineError):
+    """Error during content guardrails enforcement.
+
+    Raised when: policy check fails, violation recording fails,
+    or policy CRUD operations encounter an error.
+    """
+
+    def __init__(
+        self,
+        message: str = "Guardrails operation failed",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class AnalyticsError(PipelineError):
+    """Error during analytics computation.
+
+    Raised when: KPI aggregation fails, time-series query fails,
+    or drift detection encounters an error.
+    """
+
+    def __init__(
+        self,
+        message: str = "Analytics operation failed",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class BillingError(SmartTalkerError):
+    """Error during billing operations.
+
+    Raised when: quota exceeded, metering fails, or usage
+    recording encounters an error.
+    """
+
+    def __init__(
+        self,
+        message: str = "Billing operation failed",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class DatabaseError(SmartTalkerError):
+    """Error during database operations.
+
+    Raised when: connection fails, query fails, or migration
+    encounters an error.
+    """
+
+    def __init__(
+        self,
+        message: str = "Database operation failed",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class AgentError(SmartTalkerError):
+    """Error during AI Optimization Agent operations.
+
+    Raised when: detection scan fails, auto-fix fails,
+    or pattern tracking encounters an error.
+    """
+
+    def __init__(
+        self,
+        message: str = "Agent operation failed",
         detail: Optional[Any] = None,
         original_exception: Optional[Exception] = None,
     ) -> None:

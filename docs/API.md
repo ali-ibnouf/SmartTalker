@@ -59,46 +59,6 @@ Send text, receive AI-generated audio response.
 
 ---
 
-### POST `/api/v1/text-to-video`
-Send text, receive AI-generated video with talking avatar (LLM → TTS → Video → Upscale).
-
-Requires `VIDEO_ENABLED=true` and a valid avatar reference image.
-
-**Request Body:**
-```json
-{
-  "text": "مرحبا، كيف يمكنني مساعدتك؟",
-  "avatar_id": "default",
-  "emotion": "neutral",
-  "language": "ar",
-  "voice_id": null
-}
-```
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `text` | string | Yes | — | Input text (1–2000 chars) |
-| `avatar_id` | string | — | `"default"` | Avatar for video |
-| `emotion` | string | — | `"neutral"` | Emotion label |
-| `language` | string | — | `"ar"` | Response language |
-| `voice_id` | string | — | `null` | Voice clone ID |
-
-**Response (200):**
-```json
-{
-  "audio_url": "http://localhost:8000/files/tts_abc123.wav",
-  "video_url": "http://localhost:8000/files/video_abc123.mp4",
-  "response_text": "أهلاً وسهلاً! كيف أقدر أساعدك؟",
-  "total_latency_ms": 12500,
-  "breakdown": { "llm_ms": 500, "tts_ms": 350, "video_ms": 10000, "upscale_ms": 1650 },
-  "request_id": "a1b2c3d4"
-}
-```
-
-> **Note:** `video_url` will be `null` if `VIDEO_ENABLED=false` or if no avatar reference image is found.
-
----
-
 ### POST `/api/v1/audio-chat`
 Send audio, receive AI-generated audio response (ASR → LLM → TTS).
 
@@ -159,9 +119,7 @@ System health check.
 ```json
 {
   "status": "healthy",
-  "gpu_available": true,
-  "gpu_memory_used_mb": 8192.0,
-  "models_loaded": { "asr": true, "tts": true, "emotion": true, "video": false, "upscale": false },
+  "models_loaded": { "asr": true, "tts": true, "emotion": true, "llm": true, "kb": true },
   "uptime_s": 3600.0
 }
 ```

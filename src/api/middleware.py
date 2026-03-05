@@ -25,9 +25,13 @@ logger = setup_logger("api.middleware")
 
 # Paths excluded from auth and rate limiting
 _EXCLUDED_PATHS = {
-    "/api/v1/health", "/docs", "/openapi.json", "/redoc", "/metrics",
+    "/api/v1/health", "/api/v1/languages", "/api/v1/billing/topup-packages",
+    "/docs", "/openapi.json", "/redoc",
     "/api/v1/whatsapp/webhook",  # Meta sends unsigned GET/POST for verification
 }
+
+# Paths excluded from rate limiting but still require auth
+_AUTH_ONLY_PATHS = {"/metrics"}
 
 
 def _is_excluded(path: str) -> bool:
@@ -37,6 +41,11 @@ def _is_excluded(path: str) -> bool:
     if path.startswith("/ws/"):
         return True
     return False
+
+
+def _is_rate_limit_excluded(path: str) -> bool:
+    """Check if a request path should bypass rate limiting (but may still need auth)."""
+    return _is_excluded(path) or path in _AUTH_ONLY_PATHS
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -138,13 +147,21 @@ def get_cors_config(origins: str = "*") -> dict:
 
 
 class APIKeyAuthMiddleware(BaseHTTPMiddleware):
-    """Reject requests without a valid X-API-Key header."""
+    """Reject requests without a valid X-API-Key header.
+
+    Admin endpoints (/api/v1/admin/*) require ADMIN_API_KEY.
+    All other endpoints use the regular API_KEY.
+    """
 
     _dev_warning_logged: bool = False
 
     def __init__(self, app: Any, config: Settings):
         super().__init__(app)
         self.config = config
+
+    def _is_admin_path(self, path: str) -> bool:
+        """Check if a request path requires admin-level auth."""
+        return path.startswith("/api/v1/admin/")
 
     async def dispatch(
         self,
@@ -161,8 +178,27 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
                 APIKeyAuthMiddleware._dev_warning_logged = True
             return await call_next(request)
 
-        # Validate key (constant-time comparison to prevent timing attacks)
         client_key = request.headers.get("X-API-Key", "")
+
+        # Admin endpoints require the separate ADMIN_API_KEY
+        if self._is_admin_path(request.url.path):
+            admin_key = self.config.admin_api_key
+            if not admin_key:
+                # No admin key configured — fall back to requiring regular API key
+                # but log a warning
+                if not hmac.compare_digest(client_key, self.config.api_key):
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": "Invalid or missing API Key"},
+                    )
+            elif not hmac.compare_digest(client_key, admin_key):
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Admin API key required for /admin/* endpoints"},
+                )
+            return await call_next(request)
+
+        # Regular endpoints — validate with standard API key
         if not hmac.compare_digest(client_key, self.config.api_key):
             return JSONResponse(
                 status_code=403,
@@ -185,7 +221,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
-        if _is_excluded(request.url.path):
+        if _is_rate_limit_excluded(request.url.path):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
@@ -300,7 +336,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
-        if _is_excluded(request.url.path):
+        if _is_rate_limit_excluded(request.url.path):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
@@ -342,6 +378,52 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["X-XSS-Protection"] = "0"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=()"
+        )
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self' wss: ws:; "
+            "font-src 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=63072000; includeSubDomains; preload"
+        )
         return response
+
+
+class RequestBodyLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests with Content-Length exceeding a configurable limit.
+
+    Defence-in-depth: nginx also enforces client_max_body_size, but this
+    catches requests that bypass the reverse proxy (dev, direct access).
+    VRM uploads have a dedicated route-level limit; this sets the default.
+    """
+
+    def __init__(self, app: Any, max_bytes: int = 10 * 1024 * 1024):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.max_bytes:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"Request body too large (limit: {self.max_bytes // (1024 * 1024)}MB)"
+                },
+            )
+        return await call_next(request)

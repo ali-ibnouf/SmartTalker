@@ -24,8 +24,7 @@ make run          # docker-compose up -d
 ### Prerequisites
 - Docker 24+
 - Docker Compose v2
-- NVIDIA Container Toolkit
-- NVIDIA GPU with 24GB+ VRAM
+- DashScope API key (for Qwen LLM)
 
 ### Start Services
 
@@ -43,26 +42,17 @@ docker compose logs -f core
 | Service | Port | Purpose |
 |---------|------|---------|
 | `core` | 8000 | FastAPI application |
-| `ollama` | 11434 | Qwen 2.5 LLM |
-| `redis` | 6379 | Caching and queues |
+| `postgres` | 5432 | PostgreSQL database |
+| `redis` | 6379 | Caching, sessions, rate limiting |
 | `nginx` | 80 (dev) / 80+443 (prod) | Reverse proxy & SSL termination |
 | `prometheus` | 9090 | Metrics collection |
 | `grafana` | 3000 | Dashboards & visualization |
 | `redis-exporter` | 9121 | Redis metrics (prod only) |
-| `nvidia-gpu-exporter` | 9445 | GPU metrics (prod only) |
 
-### GPU Configuration
+### Hardware Note
 
-```yaml
-# docker-compose.yml — GPU allocation
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: 1
-          capabilities: [gpu]
-```
+SmartTalker runs **CPU-only** — ASR (FunASR) and TTS (CosyVoice) run locally on CPU,
+while the LLM (Qwen) is accessed via the DashScope cloud API. No GPU is required.
 
 ## Production Deployment
 
@@ -118,10 +108,10 @@ See `.env.example` for all variables. Key settings:
 | `API_HOST` | `0.0.0.0` | Bind address |
 | `API_PORT` | `8000` | API port |
 | `API_KEY` | *(empty)* | API authentication key (required in production) |
-| `LLM_MODEL_NAME` | `qwen2.5:14b` | Ollama model |
-| `VIDEO_ENABLED` | `false` | Enable video generation |
-| `UPSCALE_ENABLED` | `false` | Enable upscaling |
-| `GPU_MEMORY_FRACTION` | `0.9` | Max GPU memory usage |
+| `DASHSCOPE_API_KEY` | *(empty)* | DashScope API key for Qwen LLM and embeddings |
+| `LLM_MODEL_NAME` | `qwen-plus` | DashScope model name |
+| `LLM_BASE_URL` | `https://dashscope.aliyuncs.com/...` | DashScope API base URL |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL connection URL |
 | `DOMAIN_NAME` | `localhost` | Domain for nginx / SSL |
 
 ## Monitoring
@@ -150,7 +140,7 @@ Grafana is auto-provisioned with the SmartTalker dashboard on startup.
    - **Error Rate** — 5xx error percentage (green <1%, yellow <5%, red >=5%)
    - **GPU Memory Usage** — current VRAM utilization gauge
    - **Active WebSocket Sessions** — live connection count
-   - **Pipeline Latency Breakdown** — ASR/LLM/TTS/Video avg latency
+   - **Pipeline Latency Breakdown** — ASR/LLM/TTS avg latency
 
 ### Alert Configuration
 
@@ -219,10 +209,6 @@ docker cp smarttalker-redis:/data/dump.rdb ./backups/redis-$(date +%F).rdb
 # Back up all persistent volumes
 mkdir -p ./backups
 
-# Ollama models
-docker run --rm -v smarttalker_ollama-data:/data -v $(pwd)/backups:/backup \
-  alpine tar czf /backup/ollama-data-$(date +%F).tar.gz -C /data .
-
 # Grafana data
 docker run --rm -v smarttalker_grafana-data:/data -v $(pwd)/backups:/backup \
   alpine tar czf /backup/grafana-data-$(date +%F).tar.gz -C /data .
@@ -264,7 +250,7 @@ curl http://localhost:8000/api/v1/health
 # Expected healthy response
 {
   "status": "healthy",
-  "gpu_available": true,
+  "cpu_mode": true,
   "models_loaded": { "asr": true, "tts": true, ... }
 }
 ```
@@ -273,10 +259,10 @@ curl http://localhost:8000/api/v1/health
 
 | Issue | Solution |
 |-------|----------|
-| `CUDA out of memory` | Reduce `GPU_MEMORY_FRACTION`, disable video/upscale |
-| `Cannot connect to Ollama` | Check `docker compose ps ollama`, verify port 11434 |
+| `DashScope API error` | Check `DASHSCOPE_API_KEY` is set, verify network connectivity |
+| `Cannot connect to Ollama` | Ollama is optional — use DashScope instead, or run `docker compose --profile local-llm up -d` |
 | `Model not found` | Run `bash scripts/download_models.sh` |
-| `Permission denied` | Ensure Docker user has GPU access: `sudo usermod -aG docker $USER` |
+| `Permission denied` | Ensure Docker user has access: `sudo usermod -aG docker $USER` |
 | `TTS silence output` | Check voice reference audio is 3-10s WAV, 16kHz+ |
 | `nginx 502 Bad Gateway` | Core service not ready yet — check `docker compose logs core` |
 | `SSL certificate errors` | Verify cert paths, run `certbot renew`, reload nginx |

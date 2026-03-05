@@ -1,17 +1,22 @@
-"""Text-to-Speech engine using CosyVoice 3.0.
+"""Text-to-Speech engine using DashScope qwen3-tts.
 
-Supports zero-shot voice cloning, emotion-aware synthesis,
-and Arabic language output at 22050Hz mono WAV.
+Connects to DashScope WebSocket for real-time streaming TTS with voice cloning.
+Model: qwen3-tts-vc-realtime ($0.015/min audio output).
+Voice enrollment: $0.20/voice via REST API.
+Replaces the old CosyVoice local engine.
 """
 
 from __future__ import annotations
 
-import shutil
+import asyncio
+import base64
+import json
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
+
+import httpx
 
 from src.config import Settings
 from src.utils.exceptions import TTSError
@@ -19,80 +24,51 @@ from src.utils.logger import setup_logger, log_with_latency
 
 logger = setup_logger("pipeline.tts")
 
-# Emotion-to-TTS parameter mapping
+# DashScope TTS pricing
+COST_PER_MINUTE = 0.015  # $0.015 per minute of audio output
+VOICE_ENROLLMENT_COST = 0.20  # $0.20 per voice enrollment
+
+# Emotion-to-TTS parameter mapping (speed multiplier for emotion control)
 EMOTION_PARAMS: dict[str, dict[str, Any]] = {
-    "neutral": {
-        "pitch_shift": 0,
-        "speed": 1.0,
-        "energy": "normal",
-    },
-    "happy": {
-        "pitch_shift": 2,
-        "speed": 1.1,
-        "energy": "high",
-    },
-    "sad": {
-        "pitch_shift": -1,
-        "speed": 0.9,
-        "energy": "low",
-    },
-    "angry": {
-        "pitch_shift": 3,
-        "speed": 1.2,
-        "energy": "high",
-    },
-    "surprised": {
-        "pitch_shift": 4,
-        "speed": 1.15,
-        "energy": "high",
-    },
-    "fearful": {
-        "pitch_shift": 1,
-        "speed": 0.85,
-        "energy": "low",
-    },
-    "disgusted": {
-        "pitch_shift": -2,
-        "speed": 0.95,
-        "energy": "normal",
-    },
-    "contempt": {
-        "pitch_shift": -1,
-        "speed": 0.9,
-        "energy": "normal",
-    },
+    "neutral": {"speed": 1.0},
+    "happy": {"speed": 1.1},
+    "sad": {"speed": 0.9},
+    "angry": {"speed": 1.2},
+    "surprised": {"speed": 1.15},
+    "fearful": {"speed": 0.85},
+    "disgusted": {"speed": 0.95},
+    "contempt": {"speed": 0.9},
 }
 
 
 @dataclass
+class TTSChunk:
+    """A single audio chunk from streaming TTS synthesis."""
+
+    seq: int
+    audio_bytes: bytes
+    duration_ms: int
+    sample_rate: int = 48000
+
+
+@dataclass
 class TTSResult:
-    """Result of a TTS synthesis operation.
-
-    Attributes:
-        audio_path: Path to the generated WAV file.
-        duration_s: Audio duration in seconds.
-        sample_rate: Output sample rate in Hz.
-        latency_ms: Processing time in milliseconds.
-    """
-
+    """Result of a TTS synthesis operation."""
     audio_path: str
     duration_s: float = 0.0
-    sample_rate: int = 22050
+    sample_rate: int = 48000
     latency_ms: int = 0
+    lip_sync: dict = None  # type: ignore[assignment]
+    cost_usd: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.lip_sync is None:
+            self.lip_sync = {}
 
 
 @dataclass
 class VoiceInfo:
-    """Metadata for a registered voice.
-
-    Attributes:
-        voice_id: Unique voice identifier.
-        name: Human-readable voice name.
-        language: Primary language code.
-        reference_audio: Path to the reference audio file.
-        description: Optional voice description.
-    """
-
+    """Metadata for a registered voice."""
     voice_id: str
     name: str
     language: str = "ar"
@@ -100,424 +76,433 @@ class VoiceInfo:
     description: str = ""
 
 
-class TTSEngine:
-    """CosyVoice 3.0 text-to-speech engine.
+class TTSStream:
+    """Async iterator over TTS audio chunks from a DashScope WebSocket session.
 
-    Supports zero-shot voice cloning from 3-10 second reference audio,
-    emotion-aware synthesis with pitch/speed/energy control, and
-    multi-voice management.
-
-    Args:
-        config: Application settings with TTS configuration.
+    Usage:
+        stream = await tts_engine.synthesize_stream("Hello", voice_id="v123")
+        async for chunk in stream:
+            # chunk.audio_bytes is raw PCM 48kHz 16-bit mono
+            ...
+        all_audio = await stream.collect_all()
     """
 
-    def __init__(self, config: Settings) -> None:
-        """Initialize the TTS engine.
-
-        Args:
-            config: Application settings instance.
-        """
-        self._config = config
-        self._model: Any = None
-        self._loaded = False
-        self._voices_dir = Path("voices")
-        self._output_dir = config.storage_base_dir / "tts"
-        self._voices: dict[str, VoiceInfo] = {}
-
-        # Ensure directories exist
-        self._voices_dir.mkdir(parents=True, exist_ok=True)
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(
-            "TTSEngine initialized",
-            extra={
-                "model_dir": str(config.tts_model_dir),
-                "device": config.tts_device,
-                "sample_rate": config.tts_sample_rate,
-            },
-        )
+    def __init__(self, ws: Any) -> None:
+        self._ws = ws
+        self._chunks: list[bytes] = []
+        self._total_bytes = 0
+        self._finished = False
+        self._seq = 0
 
     @property
-    def is_loaded(self) -> bool:
-        """Check if the model is currently loaded."""
-        return self._loaded
+    def duration_seconds(self) -> float:
+        """Calculated duration from total audio bytes (48kHz 16-bit mono = 96000 bytes/sec)."""
+        return self._total_bytes / 96000.0
 
-    def load(self) -> None:
-        """Load CosyVoice 3.0 model into GPU memory.
+    @property
+    def cost_usd(self) -> float:
+        return self.duration_seconds / 60.0 * COST_PER_MINUTE
 
-        Raises:
-            TTSError: If model loading fails.
-        """
-        if self._loaded:
-            logger.info("TTS model already loaded — skipping")
-            return
+    async def collect_all(self) -> bytes:
+        """Consume all chunks and return concatenated audio bytes."""
+        all_bytes = bytearray()
+        async for chunk in self:
+            all_bytes.extend(chunk.audio_bytes)
+        return bytes(all_bytes)
 
-        start = time.perf_counter()
+    def __aiter__(self) -> AsyncIterator[TTSChunk]:
+        return self
+
+    async def __anext__(self) -> TTSChunk:
+        if self._finished:
+            raise StopAsyncIteration
+
         try:
-            from cosyvoice.cli.cosyvoice import CosyVoice2  # type: ignore[import-untyped]
+            while True:
+                raw_msg = await self._ws.recv()
+                data = json.loads(raw_msg)
+                msg_type = data.get("type", "")
 
-            model_dir = str(self._config.tts_model_dir / "CosyVoice" / "pretrained_models" / "CosyVoice2-0.5B")
-            self._model = CosyVoice2(model_dir)
-            self._loaded = True
+                if msg_type == "audio.delta":
+                    audio_b64 = data.get("audio", "")
+                    if audio_b64:
+                        audio_bytes = base64.b64decode(audio_b64)
+                        self._total_bytes += len(audio_bytes)
+                        self._chunks.append(audio_bytes)
+                        duration_ms = int(len(audio_bytes) / 96000.0 * 1000)
+                        chunk = TTSChunk(
+                            seq=self._seq,
+                            audio_bytes=audio_bytes,
+                            duration_ms=duration_ms,
+                            sample_rate=48000,
+                        )
+                        self._seq += 1
+                        return chunk
 
-            elapsed = (time.perf_counter() - start) * 1000
-            log_with_latency(logger, "TTS model loaded", elapsed)
+                elif msg_type == "session.finished":
+                    self._finished = True
+                    await self._ws.close()
+                    raise StopAsyncIteration
 
-            # Scan existing voices
-            self._scan_voices()
+                elif msg_type == "error":
+                    self._finished = True
+                    await self._ws.close()
+                    raise TTSError(
+                        message="DashScope TTS error",
+                        detail=data.get("message", str(data)),
+                    )
 
-        except ImportError as exc:
-            raise TTSError(
-                message="CosyVoice package not installed",
-                detail="Clone and install from: github.com/FunAudioLLM/CosyVoice",
-                original_exception=exc,
-            ) from exc
+        except StopAsyncIteration:
+            raise
+        except TTSError:
+            raise
         except Exception as exc:
+            self._finished = True
             raise TTSError(
-                message="Failed to load TTS model",
+                message="TTS stream error",
                 detail=str(exc),
                 original_exception=exc,
             ) from exc
 
-    def synthesize(
-        self,
-        text: str,
-        voice_ref: Optional[str] = None,
-        emotion: str = "neutral",
-        speed: float = 1.0,
-    ) -> TTSResult:
-        """Synthesize speech from text.
 
-        Uses zero-shot mode if a voice reference is provided,
-        otherwise uses the default model voice.
+class TTSEngine:
+    """DashScope qwen3-tts streaming TTS engine with voice cloning.
+
+    Connects to DashScope WebSocket for real-time text-to-speech synthesis.
+    Supports voice enrollment via REST API for voice cloning.
+    Replaces the old CosyVoice local engine.
+    """
+
+    def __init__(self, config: Settings) -> None:
+        self._config = config
+        self._api_key = config.dashscope_api_key
+        self._ws_url = config.dashscope_ws_url
+        self._base_url = config.dashscope_base_url
+        self._model = config.tts_model
+        self._max_text_length = config.tts_max_text_length
+        self._loaded = True  # Cloud-based — always ready
+        self._voices: dict[str, VoiceInfo] = {}
+        self._http_client: Optional[httpx.AsyncClient] = None
+
+        logger.info(
+            "TTSEngine initialized (DashScope WebSocket)",
+            extra={"model": self._model},
+        )
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded
+
+    def load(self) -> None:
+        """No-op — DashScope TTS is cloud-based."""
+        self._loaded = True
+        logger.info("TTSEngine ready (DashScope cloud, no local model)")
+
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                base_url=self._base_url,
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        return self._http_client
+
+    async def clone_voice(
+        self, audio_url: str, prefix: str = "", language: str = "ar"
+    ) -> str:
+        """Enroll a new voice via DashScope voice-enrollment REST API.
 
         Args:
-            text: Input text to synthesize (max length from config).
-            voice_ref: Optional path to reference audio (3-10s WAV).
-            emotion: Emotion label for prosody adjustment.
-            speed: Speech speed multiplier (0.5–2.0).
+            audio_url: URL to the reference audio file (must be publicly accessible or R2 URL).
+            prefix: Optional prefix for the voice name.
+            language: Voice language code.
 
         Returns:
-            TTSResult with audio path, duration, sample rate, and latency.
+            voice_id: The enrolled voice ID for use in synthesis.
 
-        Raises:
-            TTSError: If model not loaded, text too long, or synthesis fails.
+        Cost: $0.20 per voice enrollment.
         """
-        if not self._loaded or self._model is None:
-            raise TTSError(message="TTS model not loaded — call load() first")
+        client = await self._get_http_client()
 
-        # Validate text length
+        voice_name = f"{prefix}_{uuid.uuid4().hex[:8]}" if prefix else uuid.uuid4().hex[:12]
+
+        try:
+            response = await client.post(
+                "/services/tts/voice-enrollment",
+                json={
+                    "model": self._model,
+                    "audio_url": audio_url,
+                    "voice_name": voice_name,
+                    "language": language,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            voice_id = data.get("voice_id", voice_name)
+
+            self._voices[voice_id] = VoiceInfo(
+                voice_id=voice_id,
+                name=voice_name,
+                language=language,
+                reference_audio=audio_url,
+                description=f"DashScope enrolled voice ({language})",
+            )
+
+            logger.info(
+                "Voice enrolled",
+                extra={"voice_id": voice_id, "cost_usd": VOICE_ENROLLMENT_COST},
+            )
+            return voice_id
+
+        except httpx.HTTPStatusError as exc:
+            raise TTSError(
+                message=f"Voice enrollment failed: {exc.response.status_code}",
+                detail=exc.response.text,
+                original_exception=exc,
+            ) from exc
+        except Exception as exc:
+            raise TTSError(
+                message="Voice enrollment failed",
+                detail=str(exc),
+                original_exception=exc,
+            ) from exc
+
+    async def synthesize_stream(
+        self,
+        text: str,
+        voice_id: Optional[str] = None,
+        emotion: str = "neutral",
+        speed: float = 1.0,
+        language: str = "ar",
+    ) -> TTSStream:
+        """Open a streaming TTS session and return a TTSStream async iterator.
+
+        Args:
+            text: Text to synthesize.
+            voice_id: DashScope voice ID (from clone_voice or built-in).
+            emotion: Emotion for speed adjustment.
+            speed: Base speech speed multiplier.
+            language: Target language code.
+
+        Returns:
+            TTSStream that yields TTSChunk objects.
+        """
         if not text or not text.strip():
             raise TTSError(message="Text cannot be empty")
 
-        if len(text) > self._config.tts_max_text_length:
-            raise TTSError(
-                message=f"Text too long: {len(text)} chars (max {self._config.tts_max_text_length})",
-            )
+        if len(text) > self._max_text_length:
+            raise TTSError(f"Text too long: {len(text)} chars (max {self._max_text_length})")
 
-        # Validate speed range
-        speed = max(0.5, min(2.0, speed))
-
-        # Apply emotion parameters
-        params = EMOTION_PARAMS.get(emotion, EMOTION_PARAMS["neutral"])
-        effective_speed = speed * params["speed"]
-
-        # Generate unique output filename
-        output_filename = f"tts_{uuid.uuid4().hex[:12]}.wav"
-        output_path = self._output_dir / output_filename
-
-        start = time.perf_counter()
         try:
-            if voice_ref:
-                # Zero-shot voice cloning mode
-                audio_output = self._synthesize_zero_shot(
-                    text=text,
-                    reference_audio=voice_ref,
-                    speed=effective_speed,
-                )
-            else:
-                # Default voice mode
-                audio_output = self._synthesize_default(
-                    text=text,
-                    speed=effective_speed,
-                )
-
-            # Save audio output
-            duration_s = self._save_audio(audio_output, output_path)
-            elapsed_ms = int((time.perf_counter() - start) * 1000)
-
-            result = TTSResult(
-                audio_path=str(output_path),
-                duration_s=round(duration_s, 3),
-                sample_rate=self._config.tts_sample_rate,
-                latency_ms=elapsed_ms,
+            import websockets
+        except ImportError:
+            raise TTSError(
+                message="websockets not installed",
+                detail="Install with: pip install websockets",
             )
 
-            log_with_latency(
-                logger,
-                "TTS synthesis complete",
-                elapsed_ms,
+        # Apply emotion speed adjustment
+        emotion_params = EMOTION_PARAMS.get(emotion, EMOTION_PARAMS["neutral"])
+        effective_speed = speed * emotion_params["speed"]
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+        }
+
+        try:
+            ws = await websockets.connect(
+                self._ws_url,
+                additional_headers=headers,
+                ping_interval=20,
+                ping_timeout=10,
+            )
+
+            # Configure TTS session
+            session_config: dict[str, Any] = {
+                "model": self._model,
+                "output_audio_format": "pcm16",
+                "sample_rate": 48000,
+                "speed": effective_speed,
+            }
+            if voice_id:
+                session_config["voice"] = voice_id
+
+            config_msg = {
+                "type": "session.update",
+                "session": session_config,
+            }
+            await ws.send(json.dumps(config_msg))
+
+            # Wait for session acknowledgment
+            ack_raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
+            ack = json.loads(ack_raw)
+            if ack.get("type") == "error":
+                raise TTSError(
+                    message="DashScope TTS session creation failed",
+                    detail=ack.get("message", str(ack)),
+                )
+
+            # Send the text for synthesis
+            text_msg = {
+                "type": "input_text.append",
+                "text": text,
+            }
+            await ws.send(json.dumps(text_msg))
+
+            # Signal that all text has been sent
+            await ws.send(json.dumps({"type": "input_text.commit"}))
+
+            logger.info(
+                "TTS stream started",
                 extra={
                     "text_length": len(text),
-                    "duration_s": result.duration_s,
+                    "voice_id": voice_id or "default",
                     "emotion": emotion,
-                    "voice_ref": voice_ref is not None,
+                    "speed": effective_speed,
                 },
             )
-            return result
+
+            return TTSStream(ws)
 
         except TTSError:
             raise
         except Exception as exc:
             raise TTSError(
-                message="TTS synthesis failed",
+                message="Failed to start TTS stream",
                 detail=str(exc),
                 original_exception=exc,
             ) from exc
 
-    def _synthesize_zero_shot(
+    async def synthesize(
         self,
         text: str,
-        reference_audio: str,
+        voice_id: Optional[str] = None,
+        emotion: str = "neutral",
         speed: float = 1.0,
-    ) -> Any:
-        """Synthesize using zero-shot voice cloning.
+        language: str = "ar",
+    ) -> TTSResult:
+        """Synthesize speech and return all audio at once (non-streaming convenience).
 
-        Args:
-            text: Text to synthesize.
-            reference_audio: Path to reference audio (3-10 seconds).
-            speed: Speech speed multiplier.
-
-        Returns:
-            Raw audio tensor/array from CosyVoice.
-
-        Raises:
-            TTSError: If reference audio is invalid.
+        Backward compatible with old CosyVoice interface.
         """
-        ref_path = Path(reference_audio)
-        if not ref_path.exists():
-            raise TTSError(
-                message=f"Voice reference file not found: {reference_audio}",
-            )
+        import struct
+        from pathlib import Path
 
-        # CosyVoice zero-shot inference
-        # The prompt text is extracted from the reference audio
-        output_gen = self._model.inference_zero_shot(
-            tts_text=text,
-            prompt_text="",
-            prompt_speech_16k=str(ref_path),
-            stream=False,
-            speed=speed,
+        start = time.perf_counter()
+
+        stream = await self.synthesize_stream(text, voice_id, emotion, speed, language)
+        all_audio = await stream.collect_all()
+
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+        # Save to WAV file
+        output_dir = self._config.storage_base_dir / "tts"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"tts_{uuid.uuid4().hex[:12]}.wav"
+
+        # Write WAV header + PCM data
+        sample_rate = 48000
+        num_channels = 1
+        bits_per_sample = 16
+        data_size = len(all_audio)
+        with open(output_path, "wb") as f:
+            f.write(b"RIFF")
+            f.write(struct.pack("<I", 36 + data_size))
+            f.write(b"WAVE")
+            f.write(b"fmt ")
+            f.write(struct.pack("<I", 16))
+            f.write(struct.pack("<H", 1))  # PCM
+            f.write(struct.pack("<H", num_channels))
+            f.write(struct.pack("<I", sample_rate))
+            f.write(struct.pack("<I", sample_rate * num_channels * bits_per_sample // 8))
+            f.write(struct.pack("<H", num_channels * bits_per_sample // 8))
+            f.write(struct.pack("<H", bits_per_sample))
+            f.write(b"data")
+            f.write(struct.pack("<I", data_size))
+            f.write(all_audio)
+
+        duration_s = stream.duration_seconds
+        lip_sync = self._prepare_lip_sync(text, language, duration_s)
+
+        result = TTSResult(
+            audio_path=str(output_path),
+            duration_s=round(duration_s, 3),
+            sample_rate=sample_rate,
+            latency_ms=elapsed_ms,
+            lip_sync=lip_sync,
+            cost_usd=stream.cost_usd,
         )
 
-        # Collect output from generator
-        for result in output_gen:
-            return result["tts_speech"]
-
-        raise TTSError(message="Zero-shot synthesis produced no output")
-
-    def _synthesize_default(
-        self,
-        text: str,
-        speed: float = 1.0,
-    ) -> Any:
-        """Synthesize using the default model voice.
-
-        Args:
-            text: Text to synthesize.
-            speed: Speech speed multiplier.
-
-        Returns:
-            Raw audio tensor/array from CosyVoice.
-        """
-        # CosyVoice instruct mode with default speaker
-        output_gen = self._model.inference_sft(
-            tts_text=text,
-            spk_id="default",
-            stream=False,
-            speed=speed,
+        log_with_latency(
+            logger, "TTS synthesis complete", elapsed_ms,
+            extra={
+                "text_length": len(text),
+                "emotion": emotion,
+                "language": language,
+                "cost_usd": f"{stream.cost_usd:.6f}",
+            },
         )
+        return result
 
-        for result in output_gen:
-            return result["tts_speech"]
+    @staticmethod
+    def _estimate_phoneme_weight(word: str) -> float:
+        """Estimate a word's spoken duration weight using phoneme-aware heuristics."""
+        import unicodedata
 
-        raise TTSError(message="Default synthesis produced no output")
-
-    def _save_audio(self, audio_tensor: Any, output_path: Path) -> float:
-        """Save audio tensor to WAV file.
-
-        Args:
-            audio_tensor: Audio data (torch tensor or numpy array).
-            output_path: Destination file path.
-
-        Returns:
-            Audio duration in seconds.
-
-        Raises:
-            TTSError: If saving fails.
-        """
-        try:
-            import numpy as np
-            import soundfile as sf
-
-            # Convert torch tensor to numpy if needed
-            if hasattr(audio_tensor, "cpu"):
-                audio_data = audio_tensor.cpu().numpy()
-            elif isinstance(audio_tensor, np.ndarray):
-                audio_data = audio_tensor
+        weight = 0.0
+        for ch in word:
+            cat = unicodedata.category(ch)
+            if cat == "Mn":
+                weight += 0.3
+            elif ch.lower() in "aeiou\u0627\u0648\u064a":
+                weight += 1.0
+            elif ch.lower() in "rlmnwy\u0631\u0644\u0645\u0646":
+                weight += 0.7
+            elif ch.lower() in "szfv\u0633\u0632\u0641\u0634":
+                weight += 0.6
             else:
-                audio_data = np.array(audio_tensor)
+                weight += 0.4
+        return max(weight, 0.1)
 
-            # Ensure 1D (mono)
-            if audio_data.ndim > 1:
-                audio_data = audio_data.squeeze()
+    def _prepare_lip_sync(self, text: str, language: str, duration_s: float) -> dict:
+        """Generate word-level timing data for lip sync."""
+        import re as _re
 
-            # Normalize to [-1.0, 1.0] range
-            max_val = np.abs(audio_data).max()
-            if max_val > 0:
-                audio_data = audio_data / max_val * 0.95
+        words = _re.split(r"[\s\u200b\u200c\u200d]+", text.strip())
+        words = [w for w in words if w]
 
-            # Write WAV file
-            sf.write(
-                str(output_path),
-                audio_data,
-                samplerate=self._config.tts_sample_rate,
-                subtype="PCM_16",
-            )
+        if not words or duration_s <= 0:
+            return {"words": []}
 
-            duration_s = len(audio_data) / self._config.tts_sample_rate
-            return duration_s
+        word_weights = [self._estimate_phoneme_weight(w) for w in words]
+        total_weight = sum(word_weights)
+        if total_weight <= 0:
+            return {"words": []}
 
-        except Exception as exc:
-            raise TTSError(
-                message="Failed to save TTS audio",
-                detail=str(exc),
-                original_exception=exc,
-            ) from exc
+        current_time = 0.0
+        word_timings = []
 
-    def clone_voice(
-        self,
-        reference_audio: str,
-        voice_name: str,
-    ) -> str:
-        """Register a new voice from reference audio.
+        for word, wt in zip(words, word_weights):
+            word_duration = (wt / total_weight) * duration_s
+            word_timings.append({
+                "word": word,
+                "start": round(current_time, 3),
+                "end": round(current_time + word_duration, 3),
+            })
+            current_time += word_duration
 
-        Copies the reference audio to the voices directory and
-        registers it for future synthesis calls.
-
-        Args:
-            reference_audio: Path to reference audio (3-10 seconds, WAV).
-            voice_name: Human-readable name for the voice.
-
-        Returns:
-            Unique voice_id string.
-
-        Raises:
-            TTSError: If the reference audio is invalid.
-        """
-        ref_path = Path(reference_audio)
-        if not ref_path.exists():
-            raise TTSError(message=f"Reference audio not found: {reference_audio}")
-
-        # Validate reference audio duration
-        try:
-            from src.utils.audio import get_duration
-            duration = get_duration(ref_path)
-        except Exception:
-            duration = 0.0
-
-        if duration < 3.0:
-            raise TTSError(
-                message=f"Reference audio too short: {duration:.1f}s (min 3s)",
-            )
-        if duration > 10.0:
-            raise TTSError(
-                message=f"Reference audio too long: {duration:.1f}s (max 10s)",
-            )
-
-        # Generate voice ID and copy file
-        voice_id = f"voice_{uuid.uuid4().hex[:8]}"
-        dest_path = self._voices_dir / f"{voice_id}{ref_path.suffix}"
-        shutil.copy2(str(ref_path), str(dest_path))
-
-        # Register voice
-        voice_info = VoiceInfo(
-            voice_id=voice_id,
-            name=voice_name,
-            language="ar",
-            reference_audio=str(dest_path),
-            description=f"Cloned voice from {ref_path.name}",
-        )
-        self._voices[voice_id] = voice_info
-
-        logger.info(
-            "Voice cloned and registered",
-            extra={"voice_id": voice_id, "name": voice_name, "duration_s": round(duration, 2)},
-        )
-        return voice_id
+        return {"words": word_timings}
 
     def list_voices(self) -> list[VoiceInfo]:
-        """List all registered voices.
-
-        Returns:
-            List of VoiceInfo objects for all available voices.
-        """
         return list(self._voices.values())
 
-    def _scan_voices(self) -> None:
-        """Scan the voices directory for existing reference audio files."""
-        for voice_file in self._voices_dir.iterdir():
-            if voice_file.suffix.lower() in {".wav", ".mp3", ".ogg", ".m4a"}:
-                voice_id = voice_file.stem
-                if voice_id not in self._voices:
-                    self._voices[voice_id] = VoiceInfo(
-                        voice_id=voice_id,
-                        name=voice_id,
-                        language="ar",
-                        reference_audio=str(voice_file),
-                    )
-
-        logger.info(
-            "Voices scanned",
-            extra={"count": len(self._voices)},
-        )
-
-    def get_emotion_params(self, emotion: str) -> dict[str, Any]:
-        """Get TTS parameters for a given emotion.
-
-        Args:
-            emotion: Emotion label (neutral, happy, sad, angry, etc.).
-
-        Returns:
-            Dictionary of pitch_shift, speed, and energy parameters.
-        """
-        return EMOTION_PARAMS.get(emotion, EMOTION_PARAMS["neutral"])
-
     def unload(self) -> None:
-        """Free GPU memory by unloading the TTS model.
-
-        Safe to call even if the model is not loaded.
-        """
-        try:
-            if self._model is not None:
-                del self._model
-                self._model = None
-
-            self._loaded = False
-
-            # Attempt to free CUDA memory
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except ImportError:
-                pass
-
-            logger.info("TTS model unloaded and GPU memory freed")
-
-        except Exception as exc:
-            logger.warning(
-                "Error during TTS model unload",
-                extra={"error": str(exc)},
-            )
-            self._loaded = False
+        """Clean up HTTP client."""
+        self._loaded = False
+        if self._http_client is not None and not self._http_client.is_closed:
+            # Cannot await in sync method — client will be garbage collected
+            self._http_client = None
+        logger.info("TTS engine unloaded")

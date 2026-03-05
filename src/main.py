@@ -14,22 +14,38 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.api.middleware import (
     APIKeyAuthMiddleware,
     LoggingMiddleware,
     RedisRateLimitMiddleware,
+    RequestBodyLimitMiddleware,
     RequestIDMiddleware,
     SecurityHeadersMiddleware,
     get_cors_config,
 )
 from src.api.routes import router as api_router
+from src.api.dashboard_routes import router as dashboard_router
+from src.api.tool_routes import router as tool_router
+from src.api.workflow_routes import router as workflow_router
+from src.api.learning_routes import router as learning_router
+from src.api.admin_cost_routes import router as admin_cost_router
+from src.services.ai_agent.routes import router as agent_router
 from src.api.schemas import ErrorResponse
 from src.api.websocket import WebSocketManager, websocket_chat_endpoint
+from src.api.operator_ws import OperatorWebSocketManager, operator_websocket_endpoint
+from src.api.ws_visitor import visitor_session_handler
 from src.config import get_settings
+from src.db import Database
+from src.pipeline.billing import BillingEngine
+from src.pipeline.kill_switch import KillSwitch
 from src.pipeline.orchestrator import SmartTalkerPipeline
+from src.pipeline.persona import PersonaEngine
+from src.pipeline.learning_analytics import LearningAnalytics
+from src.pipeline.supervisor import SupervisorEngine
+from src.pipeline.analytics import AnalyticsEngine
 from src.utils.exceptions import SmartTalkerError
 from src.utils.logger import setup_logger
 from src.integrations.whatsapp import WhatsAppClient
@@ -44,7 +60,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application startup and shutdown lifecycle.
 
     On startup: load configuration and initialize pipeline models.
-    On shutdown: unload all models and free GPU memory.
+    On shutdown: unload all models and free resources.
 
     Args:
         application: The FastAPI application instance.
@@ -57,6 +73,16 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
     config = get_settings()
     application.state.config = config
+
+    # Initialize PostgreSQL database
+    db = Database(url=config.database_url, echo=config.debug)
+    try:
+        await db.connect()
+        logger.info("PostgreSQL database connected")
+    except Exception as exc:
+        logger.warning(f"PostgreSQL connection failed: {exc}")
+        db = None
+    application.state.db = db
 
     # Initialize Redis client
     redis_client = None
@@ -73,7 +99,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         redis_client = None
     application.state.redis = redis_client
 
-    pipeline = SmartTalkerPipeline(config)
+    pipeline = SmartTalkerPipeline(config, db=db)
     application.state.pipeline = pipeline
 
     # Initialize WhatsApp client
@@ -89,6 +115,17 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     )
     application.state.ws_manager = ws_manager
 
+    # Initialize Operator WebSocket manager
+    operator_storage = config.storage_base_dir / "operator"
+    operator_manager = OperatorWebSocketManager(
+        customer_ws_manager=ws_manager,
+        storage_dir=operator_storage,
+        api_key=config.api_key,
+        pipeline=pipeline,
+    )
+    ws_manager.set_operator_manager(operator_manager)
+    application.state.operator_manager = operator_manager
+
     # Initialize WebRTC handler (if enabled)
     if config.webrtc_enabled:
         webrtc_handler = WebRTCSignalingHandler(pipeline=pipeline, config=config)
@@ -101,6 +138,97 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Pipeline models loaded successfully")
     except Exception as exc:
         logger.warning(f"Some models failed to load: {exc}")
+
+    # Load Training engine (async — requires aiosqlite or db)
+    if pipeline._training is not None:
+        try:
+            await pipeline._training.load()
+            logger.info("Training engine loaded successfully")
+        except Exception as exc:
+            logger.warning(f"Training engine failed to load: {exc}")
+            
+    # Initialize Learning Analytics
+    learning_analytics = LearningAnalytics(config, db=db)
+    try:
+        await learning_analytics.load()
+        logger.info("LearningAnalytics loaded")
+        if pipeline._training is not None:
+            pipeline._training._analytics = learning_analytics
+    except Exception as exc:
+        logger.warning(f"LearningAnalytics failed to load: {exc}")
+    application.state.learning_analytics = learning_analytics
+
+    # Initialize Supervisor
+    supervisor = SupervisorEngine(config, db=db)
+    try:
+        await supervisor.load()
+        logger.info("SupervisorEngine loaded")
+    except Exception as exc:
+        logger.warning(f"SupervisorEngine failed to load: {exc}")
+    application.state.supervisor = supervisor
+    supervisor.set_ws_manager(ws_manager)
+
+    # Initialize Analytics
+    analytics_engine = AnalyticsEngine(config, db=db)
+    try:
+        await analytics_engine.load()
+        logger.info("AnalyticsEngine loaded")
+    except Exception as exc:
+        logger.warning(f"AnalyticsEngine failed to load: {exc}")
+    application.state.analytics = analytics_engine
+
+    # Map Guardrails
+    if pipeline._guardrails is not None:
+        try:
+            await pipeline._guardrails.load()
+            logger.info("GuardrailsEngine loaded")
+        except Exception as exc:
+            logger.warning(f"GuardrailsEngine failed to load: {exc}")
+        application.state.guardrails = pipeline._guardrails
+    else:
+        application.state.guardrails = None
+
+    # Initialize Billing engine
+    billing = BillingEngine(config, db=db)
+    try:
+        await billing.load()
+        logger.info("BillingEngine loaded")
+    except Exception as exc:
+        logger.warning(f"BillingEngine failed to load: {exc}")
+    application.state.billing = billing
+
+    # Initialize Persona engine
+    persona_engine = PersonaEngine(config, db=db)
+    try:
+        await persona_engine.load()
+        logger.info("PersonaEngine loaded")
+    except Exception as exc:
+        logger.warning(f"PersonaEngine failed to load: {exc}")
+    application.state.persona_engine = persona_engine
+
+    # Initialize Kill Switch
+    kill_switch = KillSwitch(db=db, redis=redis_client, ws_manager=ws_manager)
+    application.state.kill_switch = kill_switch
+
+    # Initialize AI Optimization Agent
+    from src.services.ai_agent import AIAgent
+    from src.services.ai_agent.config import AgentSettings
+    from src.services.ai_agent.rules import AgentContext
+
+    agent_config = AgentSettings()
+    agent_ctx = AgentContext(
+        db=db,
+        redis=redis_client,
+        pipeline=pipeline,
+        config=config,
+        agent_config=agent_config,
+        operator_manager=operator_manager,
+    )
+    ai_agent = AIAgent(agent_ctx)
+    if agent_config.agent_enabled:
+        await ai_agent.start()
+        logger.info("AI Optimization Agent started")
+    application.state.ai_agent = ai_agent
 
     # Initialize storage manager and schedule periodic cleanup
     storage = StorageManager(config)
@@ -137,10 +265,25 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         await cleanup_task
     except asyncio.CancelledError:
         pass
+    
+    # Stop AI Agent
+    await ai_agent.stop()
+
+    # Unload engines
+    await learning_analytics.unload()
+    await supervisor.unload()
+    await analytics_engine.unload()
+    if pipeline._guardrails is not None:
+        await pipeline._guardrails.unload()
+        
+    await billing.unload()
+    await persona_engine.unload()
     await pipeline.unload_all()
     await whatsapp.close()
     if redis_client:
         await redis_client.close()
+    if db:
+        await db.disconnect()
     logger.info("Shutdown complete")
 
 
@@ -157,9 +300,9 @@ def create_app() -> FastAPI:
         description=(
             "Digital Human AI Agent Platform — "
             "Real-time talking avatar with Arabic-first support. "
-            "Speech-in, video-out pipeline using Chinese open-source AI tools."
+            "Qwen3 LLM, DashScope TTS/ASR, RunPod GPU rendering."
         ),
-        version="1.0.0",
+        version="3.0.0",
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -168,7 +311,8 @@ def create_app() -> FastAPI:
 
     # ── Middleware (order matters: outermost first) ───────────────────────
 
-    # Inner middlewares (Auth, RateLimit)
+    # Inner middlewares (Auth, RateLimit, Body size)
+    application.add_middleware(RequestBodyLimitMiddleware, max_bytes=10 * 1024 * 1024)
     application.add_middleware(APIKeyAuthMiddleware, config=config)
     application.add_middleware(RedisRateLimitMiddleware, config=config)
 
@@ -181,12 +325,29 @@ def create_app() -> FastAPI:
 
     # ── Routers ──────────────────────────────────────────────────────────
     application.include_router(api_router)
+    application.include_router(dashboard_router)
+    application.include_router(tool_router)
+    application.include_router(workflow_router)
+    application.include_router(learning_router)
+    application.include_router(admin_cost_router)
+    application.include_router(agent_router)
 
     # ── WebSocket Endpoint ───────────────────────────────────────────────
     @application.websocket("/ws/chat")
     async def ws_chat(websocket: WebSocket):
         manager = application.state.ws_manager
         await websocket_chat_endpoint(websocket, manager)
+
+    # ── Visitor Direct Session ────────────────────────────────────────────
+    @application.websocket("/session")
+    async def ws_session(websocket: WebSocket):
+        await visitor_session_handler(websocket)
+
+    # ── Operator WebSocket ───────────────────────────────────────────────
+    @application.websocket("/ws/operator")
+    async def ws_operator(websocket: WebSocket):
+        manager = application.state.operator_manager
+        await operator_websocket_endpoint(websocket, manager)
 
     # ── WebRTC Signaling ─────────────────────────────────────────────────
     if config.webrtc_enabled:
@@ -200,6 +361,25 @@ def create_app() -> FastAPI:
 
     # ── Static Files ─────────────────────────────────────────────────────
     config.static_files_dir.mkdir(parents=True, exist_ok=True)
+
+    # Documents directory
+    docs_dir = config.storage_base_dir / "operator" / "documents"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    application.mount(
+        "/files/documents",
+        StaticFiles(directory=str(docs_dir)),
+        name="documents",
+    )
+
+    # VRM models directory
+    vrm_dir = config.static_files_dir / "vrm"
+    vrm_dir.mkdir(parents=True, exist_ok=True)
+    application.mount(
+        "/files/vrm",
+        StaticFiles(directory=str(vrm_dir)),
+        name="vrm_files",
+    )
+
     application.mount(
         "/files",
         StaticFiles(directory=str(config.static_files_dir)),
@@ -268,6 +448,24 @@ def create_app() -> FastAPI:
 
     # ── Frontend UI ────────────────────────────────────────────────────
     frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+
+    # Avatar video clips (pre-generated via RunPod worker)
+    clips_dir = config.clips_dir
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    application.mount(
+        "/clips",
+        StaticFiles(directory=str(clips_dir)),
+        name="clips",
+    )
+
+    # Operator dashboard — explicit route for /operator
+    operator_html = frontend_dir / "operator.html"
+    if operator_html.is_file():
+        @application.get("/operator", include_in_schema=False)
+        async def serve_operator():
+            return FileResponse(str(operator_html))
+
+    # Main customer frontend (catch-all — must be last)
     if frontend_dir.is_dir():
         application.mount(
             "/app",

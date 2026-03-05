@@ -1,32 +1,24 @@
 # =============================================================================
-# SmartTalker — Multi-stage Dockerfile
-# Base: NVIDIA CUDA 12.4 on Ubuntu 22.04
+# SmartTalker Central — Multi-stage Dockerfile
+# DashScope LLM (cloud), CosyVoice TTS (local CPU), FunASR ASR (local CPU)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
 # Stage 1: Builder — install Python dependencies
 # ---------------------------------------------------------------------------
-FROM nvidia/cuda:12.4.0-devel-ubuntu22.04 AS builder
+FROM python:3.11-slim AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # System dependencies for building Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-venv \
-    python3.10-dev \
-    python3-pip \
     build-essential \
-    cmake \
     git \
-    wget \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
-RUN python3.10 -m venv /opt/venv
+RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Upgrade pip
@@ -36,27 +28,25 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
+# Install CosyVoice from source
+RUN git clone --depth 1 https://github.com/FunAudioLLM/CosyVoice.git /tmp/cosyvoice \
+    && cd /tmp/cosyvoice \
+    && pip install --no-cache-dir -e . \
+    && rm -rf /tmp/cosyvoice/.git
+
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime — slim image with application
 # ---------------------------------------------------------------------------
-FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04 AS runtime
+FROM python:3.11-slim AS runtime
 
-ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/opt/venv/bin:$PATH"
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-venv \
     ffmpeg \
     libsndfile1 \
-    libsm6 \
-    libxext6 \
-    libgl1-mesa-glx \
     libglib2.0-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -68,14 +58,18 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
 # Create required directories
-RUN mkdir -p /app/models /app/avatars /app/voices /app/outputs /app/logs /app/files
+RUN mkdir -p /app/models/cosyvoice /app/models/funasr /app/voices /app/outputs \
+    /app/logs /app/files /app/clips /app/kb
 
 # Copy application code
 COPY src/ /app/src/
-COPY scripts/ /app/scripts/
+COPY frontend/ /app/frontend/
 
-# Make scripts executable
-RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
+# Pre-download FunASR SenseVoice model
+RUN python -c "\
+from funasr import AutoModel; \
+model = AutoModel(model='iic/SenseVoiceSmall', device='cpu', hub='ms', model_dir='/app/models/funasr'); \
+print('FunASR SenseVoice model downloaded')" || echo "FunASR download skipped (will download at runtime)"
 
 # Create non-root user
 RUN groupadd -r smarttalker && useradd -r -g smarttalker -d /app smarttalker \

@@ -127,17 +127,18 @@ else
     warn ".env already exists — skipping"
 fi
 
-# ── 8. Ollama ────────────────────────────────────────────────────────────────
-if ! command -v ollama &> /dev/null; then
-    info "Installing Ollama..."
-    curl -fsSL https://ollama.com/install.sh | sh
-    log "Ollama installed"
-else
-    log "Ollama already installed: $(ollama --version)"
-fi
-
-info "Pulling Qwen 2.5 14B model (this may take a while)..."
-sudo -u "$INSTALL_USER" ollama pull qwen2.5:14b || warn "Failed to pull model — you can pull it later with: ollama pull qwen2.5:14b"
+# ── 8. Ollama (OPTIONAL — for local LLM development) ────────────────────────
+info "Ollama is optional — DashScope API is the default LLM backend."
+info "To use local LLM via Ollama instead, uncomment and run the lines below."
+# if ! command -v ollama &> /dev/null; then
+#     info "Installing Ollama..."
+#     curl -fsSL https://ollama.com/install.sh | sh
+#     log "Ollama installed"
+# else
+#     log "Ollama already installed: $(ollama --version)"
+# fi
+# info "Pulling Qwen 2.5 14B model (this may take a while)..."
+# sudo -u "$INSTALL_USER" ollama pull qwen2.5:14b || warn "Failed to pull model"
 
 # ── 9. Summary ───────────────────────────────────────────────────────────────
 echo ""
@@ -146,13 +147,14 @@ echo "  ✅ SmartTalker Setup Complete!"
 echo "============================================="
 echo ""
 echo "  Next steps:"
-echo "  1. Edit .env with your configuration"
+echo "  1. Edit .env — add your DASHSCOPE_API_KEY"
 echo "  2. Download AI models:  bash scripts/download_models.sh"
 echo "  3. Start with Docker:   docker compose up -d"
 echo "     OR locally:          source venv/bin/activate && make dev"
 echo ""
+echo "  (Optional) For local LLM via Ollama:"
+echo "     docker compose --profile local-llm up -d"
+echo ""
 echo "  API will be available at: http://localhost:8000"
 echo "  API docs at:              http://localhost:8000/docs"
-echo ""
-echo "  GPU: $GPU_NAME ($GPU_MEM)"
 echo "============================================="

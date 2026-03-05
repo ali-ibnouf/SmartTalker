@@ -1,4 +1,4 @@
-"""WebRTC integration for browser-based real-time video chat.
+"""WebRTC integration for browser-based real-time voice chat.
 
 Handles peer connection setup, media tracks, audio recording,
 pipeline processing, and ICE candidate negotiation.
@@ -301,8 +301,14 @@ class WebRTCSignalingHandler:
             })
 
             # ── Signaling loop ────────────────────────────────────
+            _MAX_SIGNAL_MSG = 64 * 1024  # 64 KB for signaling messages
             while True:
-                message = await websocket.receive_json()
+                raw = await websocket.receive_text()
+                if len(raw) > _MAX_SIGNAL_MSG:
+                    await websocket.send_json({"type": "error", "error": "Signaling message too large"})
+                    continue
+                import json as _json
+                message = _json.loads(raw)
                 msg_type = message.get("type")
 
                 if msg_type == "offer":
@@ -416,7 +422,6 @@ class WebRTCSignalingHandler:
 
             # Build response with file URLs
             audio_url = f"/files/{Path(result.audio_path).name}" if result.audio_path else None
-            video_url = f"/files/{Path(result.video_path).name}" if result.video_path else None
 
             # Copy audio to static files directory for serving
             if result.audio_path:
@@ -427,19 +432,11 @@ class WebRTCSignalingHandler:
                     import shutil
                     shutil.copy2(str(src_path), str(static_dir / src_path.name))
 
-            if result.video_path:
-                static_dir = session.config.static_files_dir
-                vid_path = Path(result.video_path)
-                if vid_path.exists() and not str(vid_path).startswith(str(static_dir)):
-                    import shutil
-                    shutil.copy2(str(vid_path), str(static_dir / vid_path.name))
-
             await websocket.send_json({
                 "type": "audio_response",
                 "text": result.response_text,
                 "emotion": result.detected_emotion,
                 "audio_url": audio_url,
-                "video_url": video_url,
                 "latency_ms": result.total_latency_ms,
                 "breakdown": result.breakdown,
             })

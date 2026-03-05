@@ -1,11 +1,24 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartTalker</title>
     <link rel="stylesheet" href="style.css">
+
+    <!-- Import Maps for Three.js and @pixiv/three-vrm -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@3.3.3/lib/three-vrm.module.js"
+        }
+    }
+    </script>
 </head>
+
 <body>
     <!-- ── Header ─────────────────────────────────────────────────── -->
     <header id="header">
@@ -13,6 +26,11 @@
             <h1>SmartTalker</h1>
             <span class="subtitle">Digital Human AI Agent</span>
         </div>
+        <nav class="nav-links" style="display: flex; gap: 15px;">
+            <a href="index.html" class="active" style="color: #fff; text-decoration: none;">Chat</a>
+            <a href="operator.html" style="color: #8b949e; text-decoration: none;">Operator</a>
+            <a href="dashboard.html" style="color: #8b949e; text-decoration: none;">Dashboard</a>
+        </nav>
         <div class="header-right">
             <span id="status-dot" class="dot disconnected"></span>
             <span id="status-text">Disconnected</span>
@@ -26,31 +44,24 @@
             <div id="chat-messages"></div>
 
             <div id="chat-input-bar">
-                <input
-                    type="text"
-                    id="chat-input"
-                    placeholder="Type a message..."
-                    autocomplete="off"
-                    maxlength="2000"
-                    disabled
-                />
+                <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" maxlength="2000"
+                    disabled />
                 <button id="send-btn" disabled>Send</button>
             </div>
         </section>
 
         <!-- Right: Media Panel -->
         <section id="media-panel">
-            <!-- Video / Avatar Display -->
+            <!-- Avatar Video (pre-generated clips) -->
             <div id="video-container">
-                <video id="remote-video" autoplay playsinline></video>
-                <div id="video-placeholder">
-                    <div class="avatar-icon">&#128100;</div>
-                    <p>Avatar video will appear here</p>
-                </div>
+                <video id="avatar-video" autoplay loop muted playsinline></video>
+                <!-- VRM Canvas (3D realtime) -->
+                <canvas id="vrm-canvas" style="display:none; width: 100%; height: 100%; object-fit: cover;"></canvas>
+                <video id="local-video" autoplay playsinline muted></video>
             </div>
 
             <!-- Audio Playback (hidden, used programmatically) -->
-            <audio id="response-audio" preload="auto"></audio>
+            <audio id="response-audio" preload="auto" crossorigin="anonymous"></audio>
 
             <!-- WebRTC Controls -->
             <div id="rtc-controls">
@@ -59,6 +70,10 @@
                 <button id="mic-btn" class="mic-off" disabled>
                     <span class="mic-icon">&#127908;</span>
                     <span class="mic-label">Push to Talk</span>
+                </button>
+                <button id="scan-doc-btn" disabled title="Scan Document">
+                    <span class="scan-icon">&#128247;</span>
+                    <span class="scan-label">Scan Document</span>
                 </button>
             </div>
 
@@ -80,9 +95,6 @@
 
                     <label for="cfg-voice">Voice ID</label>
                     <input type="text" id="cfg-voice" placeholder="default" />
-
-                    <label for="cfg-video">Enable Video</label>
-                    <input type="checkbox" id="cfg-video" />
                 </div>
                 <button id="cfg-apply">Apply Settings</button>
             </details>
@@ -100,6 +112,12 @@
         <span id="session-id-display">Session: --</span>
     </footer>
 
+    <canvas id="scan-canvas" style="display:none;"></canvas>
+    <a id="scan-download" style="display:none;"></a>
+
+    <!-- VRM Setup script -->
+    <script type="module" src="vrm.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

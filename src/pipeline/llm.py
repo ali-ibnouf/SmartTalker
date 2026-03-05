@@ -1,12 +1,14 @@
-"""Large Language Model engine using Qwen 2.5 via Ollama.
+"""Large Language Model engine using Qwen3 via DashScope.
 
-Manages per-session conversation history, Arabic system prompts,
-and streaming/non-streaming text generation.
+Uses the OpenAI-compatible endpoint provided by DashScope API.
+Model: qwen3-max ($1.20/1M input, $6.00/1M output tokens).
+Manages per-session conversation history, multilingual system prompts,
+and non-streaming text generation.
 
 Audit fixes applied:
 - Per-user session isolation via session_id keyed dict
 - Session auto-expiry for idle sessions (30 min)
-- Circuit breaker pattern for transient Ollama failures
+- Circuit breaker pattern for transient API failures
 """
 
 from __future__ import annotations
@@ -41,8 +43,32 @@ ENGLISH_SYSTEM_PROMPT = (
     "Be friendly and professional."
 )
 
-# Emotion-aware prompt suffixes appended to system prompt
-EMOTION_PROMPTS: dict[str, str] = {
+# French system prompt
+FRENCH_SYSTEM_PROMPT = (
+    "Vous \u00eates un assistant IA serviable. "
+    "R\u00e9pondez de mani\u00e8re concise et claire. "
+    "Utilisez 1 \u00e0 3 phrases uniquement. "
+    "Soyez amical et professionnel."
+)
+
+# Turkish system prompt
+TURKISH_SYSTEM_PROMPT = (
+    "Sen yard\u0131mc\u0131 bir yapay zeka asistan\u0131s\u0131n. "
+    "K\u0131sa ve net yan\u0131tla. "
+    "Sadece 1-3 c\u00fcmle kullan. "
+    "Samimi ve profesyonel ol."
+)
+
+# ── Per-language system prompt lookup ─────────────────────────────────────
+_SYSTEM_PROMPTS: dict[str, str] = {
+    "ar": ARABIC_SYSTEM_PROMPT,
+    "en": ENGLISH_SYSTEM_PROMPT,
+    "fr": FRENCH_SYSTEM_PROMPT,
+    "tr": TURKISH_SYSTEM_PROMPT,
+}
+
+# ── Emotion-aware prompt suffixes (Arabic — original) ────────────────────
+EMOTION_PROMPTS_AR: dict[str, str] = {
     "neutral": "",
     "happy": " \u0623\u0638\u0647\u0631 \u062d\u0645\u0627\u0633\u0627\u064b \u0648\u0625\u064a\u062c\u0627\u0628\u064a\u0629 \u0641\u064a \u0631\u062f\u0643.",
     "sad": " \u0643\u0646 \u0645\u062a\u0639\u0627\u0637\u0641\u0627\u064b \u0648\u0644\u0637\u064a\u0641\u0627\u064b \u0641\u064a \u0631\u062f\u0643.",
@@ -51,6 +77,74 @@ EMOTION_PROMPTS: dict[str, str] = {
     "fearful": " \u0643\u0646 \u0645\u0637\u0645\u0626\u0646\u0627\u064b \u0648\u062f\u0627\u0639\u0645\u0627\u064b \u0641\u064a \u0631\u062f\u0643.",
     "disgusted": " \u0643\u0646 \u0645\u062d\u0627\u064a\u062f\u0627\u064b \u0648\u0645\u0647\u0646\u064a\u0627\u064b \u0641\u064a \u0631\u062f\u0643.",
     "contempt": " \u0643\u0646 \u0645\u062d\u062a\u0631\u0645\u0627\u064b \u0648\u0645\u0647\u0646\u064a\u0627\u064b \u0641\u064a \u0631\u062f\u0643.",
+}
+
+# Keep backwards-compatible alias
+EMOTION_PROMPTS = EMOTION_PROMPTS_AR
+
+EMOTION_PROMPTS_EN: dict[str, str] = {
+    "neutral": "",
+    "happy": " Show enthusiasm and positivity in your response.",
+    "sad": " Be empathetic and gentle in your response.",
+    "angry": " Be calm and reassuring in your response.",
+    "surprised": " Show interest and curiosity in your response.",
+    "fearful": " Be reassuring and supportive in your response.",
+    "disgusted": " Be neutral and professional in your response.",
+    "contempt": " Be respectful and professional in your response.",
+}
+
+EMOTION_PROMPTS_FR: dict[str, str] = {
+    "neutral": "",
+    "happy": " Montrez de l'enthousiasme et de la positivit\u00e9 dans votre r\u00e9ponse.",
+    "sad": " Soyez empathique et doux dans votre r\u00e9ponse.",
+    "angry": " Soyez calme et rassurant dans votre r\u00e9ponse.",
+    "surprised": " Montrez de l'int\u00e9r\u00eat et de la curiosit\u00e9 dans votre r\u00e9ponse.",
+    "fearful": " Soyez rassurant et encourageant dans votre r\u00e9ponse.",
+    "disgusted": " Soyez neutre et professionnel dans votre r\u00e9ponse.",
+    "contempt": " Soyez respectueux et professionnel dans votre r\u00e9ponse.",
+}
+
+EMOTION_PROMPTS_TR: dict[str, str] = {
+    "neutral": "",
+    "happy": " Yan\u0131t\u0131n\u0131zda co\u015fku ve pozitiflik g\u00f6sterin.",
+    "sad": " Yan\u0131t\u0131n\u0131zda empatik ve nazik olun.",
+    "angry": " Yan\u0131t\u0131n\u0131zda sakin ve g\u00fcven verici olun.",
+    "surprised": " Yan\u0131t\u0131n\u0131zda ilgi ve merak g\u00f6sterin.",
+    "fearful": " Yan\u0131t\u0131n\u0131zda g\u00fcven verici ve destekleyici olun.",
+    "disgusted": " Yan\u0131t\u0131n\u0131zda tarafs\u0131z ve profesyonel olun.",
+    "contempt": " Yan\u0131t\u0131n\u0131zda sayg\u0131l\u0131 ve profesyonel olun.",
+}
+
+# Per-language emotion prompt lookup
+_EMOTION_PROMPT_MAP: dict[str, dict[str, str]] = {
+    "ar": EMOTION_PROMPTS_AR,
+    "en": EMOTION_PROMPTS_EN,
+    "fr": EMOTION_PROMPTS_FR,
+    "tr": EMOTION_PROMPTS_TR,
+}
+
+# Per-language Knowledge Base context injection templates
+_KB_CONTEXT_TEMPLATES: dict[str, str] = {
+    "ar": (
+        "\n\n\u0627\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0633\u064a\u0627\u0642 \u0627\u0644\u062a\u0627\u0644\u064a \u0645\u0646 \u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0645\u0639\u0631\u0641\u0629 \u0644\u0644\u0625\u062c\u0627\u0628\u0629 \u0639\u0644\u0649 \u0633\u0624\u0627\u0644 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645. "
+        "\u0625\u0630\u0627 \u0643\u0627\u0646 \u0627\u0644\u0633\u064a\u0627\u0642 \u0630\u0627 \u0635\u0644\u0629\u060c \u0627\u0633\u062a\u0646\u062f \u0625\u0644\u064a\u0647 \u0641\u064a \u0625\u062c\u0627\u0628\u062a\u0643.\n\n"
+        "\u0627\u0644\u0633\u064a\u0627\u0642:\n{context}"
+    ),
+    "en": (
+        "\n\nUse the following knowledge base context to answer the user's question. "
+        "If the context is relevant, base your answer on it.\n\n"
+        "Context:\n{context}"
+    ),
+    "fr": (
+        "\n\nUtilisez le contexte suivant de la base de connaissances pour r\u00e9pondre \u00e0 la question. "
+        "Si le contexte est pertinent, basez votre r\u00e9ponse dessus.\n\n"
+        "Contexte :\n{context}"
+    ),
+    "tr": (
+        "\n\nKullan\u0131c\u0131n\u0131n sorusunu yan\u0131tlamak i\u00e7in a\u015fa\u011f\u0131daki bilgi taban\u0131 ba\u011flam\u0131n\u0131 kullan\u0131n. "
+        "Ba\u011flam ilgiliyse, yan\u0131t\u0131n\u0131z\u0131 buna dayand\u0131r\u0131n.\n\n"
+        "Ba\u011flam:\n{context}"
+    ),
 }
 
 # Session idle timeout (seconds)
@@ -76,6 +170,7 @@ class LLMResult:
     emotion: str = "neutral"
     latency_ms: int = 0
     tokens_used: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass
@@ -86,25 +181,25 @@ class _SessionState:
 
 
 class LLMEngine:
-    """Qwen 2.5 LLM engine via Ollama HTTP API.
+    """Qwen LLM engine via DashScope (OpenAI-compatible).
 
     Manages per-session conversation history, supports
-    Arabic/English prompts, and provides streaming output.
-    Includes a circuit breaker for transient Ollama failures.
+    Arabic/English prompts, and provides text generation.
+    Includes a circuit breaker for transient API failures.
 
     Args:
         config: Application settings with LLM configuration.
     """
 
-    def __init__(self, config: Settings) -> None:
-        """Initialize the LLM engine.
+    # Qwen3-max pricing per 1M tokens
+    INPUT_COST_PER_M = 1.20
+    OUTPUT_COST_PER_M = 6.00
 
-        Args:
-            config: Application settings instance.
-        """
+    def __init__(self, config: Settings) -> None:
         self._config = config
         self._base_url = config.llm_base_url
         self._model = config.llm_model_name
+        self._api_key = config.llm_api_key or config.dashscope_api_key
         self._timeout = config.llm_timeout
         self._max_tokens = config.llm_max_tokens
         self._temperature = config.llm_temperature
@@ -122,22 +217,17 @@ class LLMEngine:
         self._cb_last_failure = 0.0
 
         logger.info(
-            "LLMEngine initialized",
+            "LLMEngine initialized (DashScope API)",
             extra={"model": self._model, "base_url": self._base_url},
         )
 
     # ── Session management ───────────────────────────────────────────────
 
     async def _get_session(self, session_id: str) -> _SessionState:
-        """Get or create a session state.
-
-        Also prunes expired sessions periodically.
-        Uses an asyncio.Lock to prevent concurrent dict mutation.
-        """
+        """Get or create a session state."""
         now = time.time()
 
         async with self._session_lock:
-            # Prune expired sessions when dict grows large
             if len(self._sessions) > 50:
                 expired = [
                     sid for sid, state in self._sessions.items()
@@ -157,11 +247,7 @@ class LLMEngine:
             return session
 
     def clear_session(self, session_id: str) -> None:
-        """Clear conversation history for a specific session.
-
-        Args:
-            session_id: Session identifier to clear.
-        """
+        """Clear conversation history for a specific session."""
         if session_id in self._sessions:
             del self._sessions[session_id]
             logger.info("Session cleared", extra={"session_id": session_id})
@@ -179,34 +265,29 @@ class LLMEngine:
     # ── Client ───────────────────────────────────────────────────────────
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the async HTTP client.
-
-        Returns:
-            Configured httpx.AsyncClient instance.
-        """
+        """Get or create the async HTTP client for DashScope API."""
         if self._client is None or self._client.is_closed:
+            headers = {"Content-Type": "application/json"}
+            if self._api_key:
+                headers["Authorization"] = f"Bearer {self._api_key}"
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=httpx.Timeout(self._timeout, connect=10.0),
+                headers=headers,
             )
         return self._client
 
     # ── Circuit breaker ──────────────────────────────────────────────────
 
     def _check_circuit_breaker(self) -> None:
-        """Check if the circuit breaker is open.
-
-        Raises:
-            LLMError: If too many consecutive failures have occurred.
-        """
+        """Check if the circuit breaker is open."""
         if self._cb_failures >= _CB_THRESHOLD:
             elapsed = time.time() - self._cb_last_failure
             if elapsed < _CB_COOLDOWN:
                 raise LLMError(
-                    message=f"Circuit breaker open — {self._cb_failures} consecutive Ollama failures",
+                    message=f"Circuit breaker open — {self._cb_failures} consecutive API failures",
                     detail=f"Will retry in {_CB_COOLDOWN - elapsed:.0f}s",
                 )
-            # Cooldown expired — allow one retry (half-open)
             self._cb_failures = _CB_THRESHOLD - 1
 
     def _record_success(self) -> None:
@@ -227,38 +308,30 @@ class LLMEngine:
         language: str = "ar",
         conversation_history: Optional[list[dict[str, str]]] = None,
         session_history: Optional[deque] = None,
+        kb_context: Optional[str] = None,
     ) -> list[dict[str, str]]:
-        """Build the message array for the Ollama API.
+        """Build the message array for the OpenAI-compatible API."""
+        system_prompt = _SYSTEM_PROMPTS.get(language, ENGLISH_SYSTEM_PROMPT)
 
-        Args:
-            user_text: The user's input text.
-            emotion: Emotion label for prompt adjustment.
-            language: Target language ("ar" or "en").
-            conversation_history: Optional external history override.
-            session_history: Pre-fetched session history deque.
-
-        Returns:
-            List of message dicts with role and content.
-        """
-        # Select system prompt by language
-        system_prompt = ARABIC_SYSTEM_PROMPT if language == "ar" else ENGLISH_SYSTEM_PROMPT
-
-        # Append emotion modifier
-        emotion_suffix = EMOTION_PROMPTS.get(emotion, "")
+        emotion_dict = _EMOTION_PROMPT_MAP.get(language, EMOTION_PROMPTS_EN)
+        emotion_suffix = emotion_dict.get(emotion, "")
         if emotion_suffix:
             system_prompt += emotion_suffix
+
+        # Inject Knowledge Base context if available
+        if kb_context:
+            template = _KB_CONTEXT_TEMPLATES.get(language, _KB_CONTEXT_TEMPLATES["en"])
+            system_prompt += template.format(context=kb_context)
 
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system_prompt},
         ]
 
-        # Add conversation history (session-specific)
         if conversation_history is not None:
             messages.extend(conversation_history)
         elif session_history is not None:
             messages.extend(list(session_history))
 
-        # Add current user message
         messages.append({"role": "user", "content": user_text})
 
         return messages
@@ -272,8 +345,9 @@ class LLMEngine:
         conversation_history: Optional[list[dict[str, str]]] = None,
         language: str = "ar",
         session_id: str = "default",
+        kb_context: Optional[str] = None,
     ) -> LLMResult:
-        """Generate a response from the LLM (non-streaming).
+        """Generate a response from the LLM via DashScope API (non-streaming).
 
         Args:
             user_text: The user's input text.
@@ -281,6 +355,7 @@ class LLMEngine:
             conversation_history: Optional external history to use.
             language: Target response language ("ar" or "en").
             session_id: Session identifier for conversation isolation.
+            kb_context: Optional Knowledge Base context for RAG.
 
         Returns:
             LLMResult with generated text, emotion, latency, and token count.
@@ -293,27 +368,24 @@ class LLMEngine:
 
         self._check_circuit_breaker()
 
-        # Fetch session history before building messages (async lock)
         session = await self._get_session(session_id)
         messages = self._build_messages(
             user_text, emotion, language,
             conversation_history=conversation_history,
             session_history=session.history,
+            kb_context=kb_context,
         )
         start = time.perf_counter()
 
         try:
             client = await self._get_client()
             response = await client.post(
-                "/api/chat",
+                "/chat/completions",
                 json={
                     "model": self._model,
                     "messages": messages,
-                    "stream": False,
-                    "options": {
-                        "temperature": self._temperature,
-                        "num_predict": self._max_tokens,
-                    },
+                    "temperature": self._temperature,
+                    "max_tokens": self._max_tokens,
                 },
             )
             response.raise_for_status()
@@ -322,8 +394,8 @@ class LLMEngine:
         except httpx.ConnectError as exc:
             self._record_failure()
             raise LLMError(
-                message="Cannot connect to Ollama",
-                detail=f"Is Ollama running at {self._base_url}?",
+                message="Cannot connect to LLM API",
+                detail=f"Check that LLM API is reachable at: {self._base_url}",
                 original_exception=exc,
             ) from exc
         except httpx.TimeoutException as exc:
@@ -335,7 +407,7 @@ class LLMEngine:
         except httpx.HTTPStatusError as exc:
             self._record_failure()
             raise LLMError(
-                message=f"Ollama API error: {exc.response.status_code}",
+                message=f"LLM API error: {exc.response.status_code}",
                 detail=exc.response.text,
                 original_exception=exc,
             ) from exc
@@ -350,19 +422,29 @@ class LLMEngine:
         self._record_success()
         elapsed_ms = int((time.perf_counter() - start) * 1000)
 
-        # Parse response
+        # Parse OpenAI-compatible response
         response_text = self._extract_text(data)
         tokens_used = self._extract_tokens(data)
 
-        # Update session-specific history (session already fetched above)
-        session.history.append({"role": "user", "content": user_text})
-        session.history.append({"role": "assistant", "content": response_text})
+        # Calculate cost (qwen3-max pricing)
+        usage = data.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+        cost_usd = (input_tokens / 1_000_000 * self.INPUT_COST_PER_M) + (
+            output_tokens / 1_000_000 * self.OUTPUT_COST_PER_M
+        )
+
+        # Update session history (under lock to prevent interleaving)
+        async with self._session_lock:
+            session.history.append({"role": "user", "content": user_text})
+            session.history.append({"role": "assistant", "content": response_text})
 
         result = LLMResult(
             text=response_text,
             emotion=emotion,
             latency_ms=elapsed_ms,
             tokens_used=tokens_used,
+            cost_usd=cost_usd,
         )
 
         log_with_latency(
@@ -373,36 +455,32 @@ class LLMEngine:
                 "input_length": len(user_text),
                 "output_length": len(response_text),
                 "tokens": tokens_used,
+                "cost_usd": f"{cost_usd:.6f}",
                 "session_id": session_id,
             },
         )
         return result
 
-    # ── Response parsing ─────────────────────────────────────────────────
+    # ── Response parsing (OpenAI-compatible format) ───────────────────────
 
     @staticmethod
     def _extract_text(data: dict) -> str:
-        """Extract the assistant's response text from Ollama API data.
-
-        Args:
-            data: Parsed JSON response from Ollama.
-
-        Returns:
-            The assistant's response text.
-
-        Raises:
-            LLMError: If the response format is unexpected.
-        """
+        """Extract the assistant's response text from OpenAI-compatible response."""
         try:
-            message = data.get("message", {})
-            text = message.get("content", "").strip()
+            choices = data.get("choices", [])
+            if not choices:
+                raise LLMError(
+                    message="Empty response from LLM",
+                    detail=f"Raw response: {data}",
+                )
+            text = choices[0].get("message", {}).get("content", "").strip()
             if not text:
                 raise LLMError(
                     message="Empty response from LLM",
                     detail=f"Raw response: {data}",
                 )
             return text
-        except AttributeError as exc:
+        except (AttributeError, IndexError, KeyError) as exc:
             raise LLMError(
                 message="Unexpected LLM response format",
                 detail=str(data),
@@ -411,17 +489,9 @@ class LLMEngine:
 
     @staticmethod
     def _extract_tokens(data: dict) -> int:
-        """Extract total token usage from Ollama API data.
-
-        Args:
-            data: Parsed JSON response from Ollama.
-
-        Returns:
-            Total tokens used (prompt + completion).
-        """
-        prompt_tokens = data.get("prompt_eval_count", 0) or 0
-        completion_tokens = data.get("eval_count", 0) or 0
-        return prompt_tokens + completion_tokens
+        """Extract total token usage from OpenAI-compatible response."""
+        usage = data.get("usage", {})
+        return usage.get("total_tokens", 0)
 
     async def close(self) -> None:
         """Close the HTTP client and clean up resources."""

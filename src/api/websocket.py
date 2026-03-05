@@ -10,12 +10,22 @@ Client -> Server:
     {"type": "audio_start", "format": "wav", "language": "ar"}
     <binary audio chunks>
     {"type": "audio_end"}
-    {"type": "config", "avatar_id": "...", "voice_id": "...", "enable_video": false}
+    {"type": "config", "avatar_id": "...", "voice_id": "...", "language": "ar", "training_mode": "digital"}
+    {"type": "training_mode", "mode": "digital|human"}
+    {"type": "set_state", "state": "idle|thinking|talking_happy|talking_sad"}
+    {"type": "stop"}
     {"type": "ping"}
 
 Server -> Client:
     {"type": "session_init", "session_id": "...", "message": "Connected"}
-    {"type": "text_response", "text": "...", "emotion": "...", "audio_url": "...", ...}
+    {"type": "thinking"}
+    {"type": "body_state", "state": "...", "clip_url": "..."}
+    {"type": "voice", "audio_url": "...", "lip_sync": {...}}
+    {"type": "response", "text": "...", "emotion": "...", "latency_ms": N, "breakdown": {...},
+             "kb_confidence": 0.0, "kb_sources": [], "escalated": false, "escalation_id": null}
+    {"type": "escalation_alert", "escalation_id": "...", "question": "...", "kb_confidence": 0.0}
+    {"type": "awaiting_operator", "text": "...", "session_id": "..."}
+    {"type": "training_mode_ack", "mode": "digital|human"}
     {"type": "audio_ack", "bytes_received": N}
     {"type": "error", "error": "...", "detail": "..."}
     {"type": "pong"}
@@ -24,6 +34,7 @@ Server -> Client:
 from __future__ import annotations
 
 import asyncio
+import base64
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -54,13 +65,13 @@ class SessionConfig:
         avatar_id: Avatar identifier for video generation.
         voice_id: Optional voice clone ID for TTS.
         language: Target response language code.
-        enable_video: Whether to generate video output.
     """
 
     avatar_id: str = "default"
     voice_id: Optional[str] = None
     language: str = "ar"
-    enable_video: bool = False
+    training_mode: str = "digital"  # "digital" = AI answers, "human" = operator answers
+    avatar_type: str = "video"  # "video" = RunPod rendered, "vrm" = direct browser streaming
 
 
 @dataclass
@@ -109,6 +120,9 @@ class Session:
     connected_at: float = field(default_factory=time.time)
     client_ip: str = "unknown"
     is_recording: bool = False
+    ai_paused: bool = False
+    operator_id: Optional[str] = None
+    takeover_at: Optional[str] = None
 
 
 class WebSocketManager:
@@ -135,8 +149,13 @@ class WebSocketManager:
         self._sessions: dict[str, Session] = {}
         self._ip_counts: dict[str, int] = {}
         self._lock = asyncio.Lock()
+        self._operator_manager: Optional[Any] = None
 
         self._storage_dir.mkdir(parents=True, exist_ok=True)
+
+    def set_operator_manager(self, operator_manager: Any) -> None:
+        """Set the operator manager for relaying messages."""
+        self._operator_manager = operator_manager
 
     @property
     def active_count(self) -> int:
@@ -220,6 +239,10 @@ class WebSocketManager:
         # Clean up any in-progress audio buffer
         session.audio_buffer.reset()
 
+        # Notify operators that this session ended
+        if self._operator_manager:
+            await self._operator_manager.notify_session_ended(session.session_id)
+
         logger.info(
             "WebSocket disconnected",
             extra={
@@ -228,6 +251,9 @@ class WebSocketManager:
                 "active_sessions": self.active_count,
             },
         )
+
+    _MAX_TEXT_MSG = 256 * 1024   # 256 KB for JSON text messages
+    _MAX_AUDIO_MSG = 1024 * 1024  # 1 MB for binary audio chunks
 
     async def handle_session(self, session: Session) -> None:
         """Main receive loop for a WebSocket session.
@@ -248,8 +274,14 @@ class WebSocketManager:
                     break
 
                 if "bytes" in message and message["bytes"]:
+                    if len(message["bytes"]) > self._MAX_AUDIO_MSG:
+                        await self._send_error(session.websocket, "Audio chunk too large (1MB limit)")
+                        continue
                     await self._handle_audio_chunk(session, message["bytes"])
                 elif "text" in message and message["text"]:
+                    if len(message["text"]) > self._MAX_TEXT_MSG:
+                        await self._send_error(session.websocket, "Message too large (256KB limit)")
+                        continue
                     await self._handle_text_message(session, message["text"])
 
         except WebSocketDisconnect:
@@ -293,6 +325,11 @@ class WebSocketManager:
             "audio_start": self._handle_audio_start,
             "audio_end": self._handle_audio_end,
             "config": self._handle_config_update,
+            "set_state": self._handle_set_state,
+            "stop": self._handle_stop,
+            "training_mode": self._handle_training_mode,
+            "video_frame": self._handle_video_frame,
+            "document_upload": self._handle_document_upload,
             "ping": self._handle_ping,
         }
 
@@ -349,25 +386,98 @@ class WebSocketManager:
         )
 
         try:
+            # Relay user message to operator
+            if self._operator_manager:
+                await self._operator_manager.relay_chat_message(
+                    session.session_id, "user", text,
+                )
+
+            # In human training mode or when AI is paused (operator takeover),
+            # relay to operator and wait — don't run pipeline
+            if session.config.training_mode == "human" or session.ai_paused:
+                reason = "operator_takeover" if session.ai_paused else "human_training_mode"
+                await self._send_json(session.websocket, {
+                    "type": "awaiting_operator",
+                    "text": text,
+                    "session_id": session.session_id,
+                })
+                if self._operator_manager:
+                    await self._operator_manager.relay_escalation(
+                        session.session_id,
+                        text,
+                        reason=reason,
+                    )
+                return
+
+            # 1. Signal thinking state
+            await self._send_json(session.websocket, {"type": "thinking"})
+
             result = await self._pipeline.process_text(
                 text=text,
                 avatar_id=session.config.avatar_id,
                 voice_id=session.config.voice_id,
                 emotion=emotion,
                 language=language,
-                enable_video=session.config.enable_video,
                 session_id=session.session_id,
             )
 
-            await self._send_json(session.websocket, {
-                "type": "text_response",
+            # VRM mode: stream audio + visemes directly to browser
+            if session.config.avatar_type == "vrm":
+                await self._send_vrm_response(session, result)
+            else:
+                # 2. Send body state (which clip to play)
+                clip_url = f"/clips/{session.config.avatar_id}/{result.body_state}.mp4"
+                await self._send_json(session.websocket, {
+                    "type": "body_state",
+                    "state": result.body_state,
+                    "clip_url": clip_url,
+                })
+
+                # 3. Send voice audio + lip sync
+                audio_url = f"/files/{Path(result.audio_path).name}" if result.audio_path else None
+                await self._send_json(session.websocket, {
+                    "type": "voice",
+                    "audio_url": audio_url,
+                    "lip_sync": result.lip_sync,
+                })
+
+            # 4. Send text response with KB/escalation fields
+            response_msg = {
+                "type": "response",
                 "text": result.response_text,
                 "emotion": result.detected_emotion,
-                "audio_url": f"/files/{Path(result.audio_path).name}" if result.audio_path else None,
-                "video_url": f"/files/{Path(result.video_path).name}" if result.video_path else None,
                 "latency_ms": result.total_latency_ms,
                 "breakdown": result.breakdown,
-            })
+                "kb_confidence": getattr(result, "kb_confidence", 0.0),
+                "kb_sources": getattr(result, "kb_sources", []),
+                "escalated": getattr(result, "escalated", False),
+                "escalation_id": getattr(result, "escalation_id", None),
+            }
+            await self._send_json(session.websocket, response_msg)
+
+            # 5. Send escalation alert if needed
+            if getattr(result, "escalated", False):
+                await self._send_json(session.websocket, {
+                    "type": "escalation_alert",
+                    "escalation_id": result.escalation_id,
+                    "question": text,
+                    "kb_confidence": result.kb_confidence,
+                })
+                if self._operator_manager:
+                    await self._operator_manager.relay_escalation(
+                        session.session_id,
+                        text,
+                        reason="low_confidence",
+                        escalation_id=result.escalation_id,
+                        confidence=result.kb_confidence,
+                    )
+
+            # Relay bot response to operator
+            if self._operator_manager:
+                await self._operator_manager.relay_chat_message(
+                    session.session_id, "bot", result.response_text,
+                    {"emotion": result.detected_emotion, "latency_ms": result.total_latency_ms},
+                )
 
         except Exception as exc:
             logger.error(
@@ -499,7 +609,8 @@ class WebSocketManager:
 
         try:
             audio_data = b"".join(buffer.chunks)
-            temp_path.write_bytes(audio_data)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, temp_path.write_bytes, audio_data)
         except OSError as exc:
             buffer.reset()
             await self._send_error(
@@ -522,22 +633,43 @@ class WebSocketManager:
 
         # Process through pipeline
         try:
+            # Signal thinking state
+            await self._send_json(session.websocket, {"type": "thinking"})
+
             result = await self._pipeline.process_audio(
                 audio_path=str(temp_path),
                 avatar_id=session.config.avatar_id,
                 voice_id=session.config.voice_id,
                 emotion="neutral",
                 language=audio_language,
-                enable_video=session.config.enable_video,
                 session_id=session.session_id,
             )
 
+            # VRM mode: stream audio + visemes directly to browser
+            if session.config.avatar_type == "vrm":
+                await self._send_vrm_response(session, result)
+            else:
+                # Send body state
+                clip_url = f"/clips/{session.config.avatar_id}/{result.body_state}.mp4"
+                await self._send_json(session.websocket, {
+                    "type": "body_state",
+                    "state": result.body_state,
+                    "clip_url": clip_url,
+                })
+
+                # Send voice audio + lip sync
+                audio_url = f"/files/{Path(result.audio_path).name}" if result.audio_path else None
+                await self._send_json(session.websocket, {
+                    "type": "voice",
+                    "audio_url": audio_url,
+                    "lip_sync": result.lip_sync,
+                })
+
+            # Send text response
             await self._send_json(session.websocket, {
-                "type": "text_response",
+                "type": "response",
                 "text": result.response_text,
                 "emotion": result.detected_emotion,
-                "audio_url": f"/files/{Path(result.audio_path).name}" if result.audio_path else None,
-                "video_url": f"/files/{Path(result.video_path).name}" if result.video_path else None,
                 "latency_ms": result.total_latency_ms,
                 "breakdown": result.breakdown,
             })
@@ -559,6 +691,94 @@ class WebSocketManager:
                 pass
 
     # ═════════════════════════════════════════════════════════════════════
+    # VRM Direct Streaming
+    # ═════════════════════════════════════════════════════════════════════
+
+    async def _send_vrm_response(self, session: Session, result: Any) -> None:
+        """Stream audio chunks with viseme data directly to browser for VRM rendering.
+
+        Instead of routing through a RenderNode, this sends PCM audio + timed
+        viseme frames so the browser can drive its own VRM lip-sync animation.
+
+        Args:
+            session: The active WebSocket session.
+            result: PipelineResult from the orchestrator.
+        """
+        from src.pipeline.visemes import VisemeExtractor
+
+        audio_path = result.audio_path
+        if not audio_path:
+            await self._send_json(session.websocket, {"type": "vrm_audio_end"})
+            return
+
+        # Read the full audio file (PCM 16-bit mono 22050Hz WAV)
+        try:
+            audio_data = Path(audio_path).read_bytes()
+        except (OSError, FileNotFoundError):
+            await self._send_json(session.websocket, {"type": "vrm_audio_end"})
+            return
+
+        # Skip WAV header (44 bytes) if present
+        if audio_data[:4] == b"RIFF":
+            audio_data = audio_data[44:]
+
+        if not audio_data:
+            await self._send_json(session.websocket, {"type": "vrm_audio_end"})
+            return
+
+        # Split into ~200ms chunks (22050 samples/s * 2 bytes * 0.2s = 8820 bytes)
+        sample_rate = 22050
+        bytes_per_sample = 2
+        chunk_duration_s = 0.2
+        chunk_size = int(sample_rate * bytes_per_sample * chunk_duration_s)
+
+        # Get word-level timings from TTS if available
+        word_timings = []
+        lip_sync = getattr(result, "lip_sync", None)
+        if lip_sync and isinstance(lip_sync, dict):
+            word_timings = lip_sync.get("words", [])
+
+        total_bytes = len(audio_data)
+        total_duration_ms = int(total_bytes / (sample_rate * bytes_per_sample) * 1000)
+
+        seq = 0
+        for offset in range(0, total_bytes, chunk_size):
+            chunk = audio_data[offset:offset + chunk_size]
+            chunk_dur_ms = int(len(chunk) / (sample_rate * bytes_per_sample) * 1000)
+            chunk_start_ms = int(offset / (sample_rate * bytes_per_sample) * 1000)
+            chunk_end_ms = chunk_start_ms + chunk_dur_ms
+
+            # Compute visemes for this time window
+            if word_timings:
+                visemes = VisemeExtractor.extract_from_word_timings(
+                    word_timings, chunk_start_ms, chunk_end_ms,
+                )
+            else:
+                # Fallback: estimate from text proportional to chunk position
+                text = result.response_text or ""
+                text_frac = len(chunk) / max(total_bytes, 1)
+                char_start = int(len(text) * offset / max(total_bytes, 1))
+                char_end = int(len(text) * (offset + len(chunk)) / max(total_bytes, 1))
+                chunk_text = text[char_start:char_end]
+                visemes = VisemeExtractor.extract_timed(chunk_text, chunk_dur_ms)
+
+            await self._send_json(session.websocket, {
+                "type": "vrm_audio",
+                "seq": seq,
+                "audio_b64": base64.b64encode(chunk).decode("ascii"),
+                "duration_ms": chunk_dur_ms,
+                "visemes": [
+                    {"time_ms": v.start_ms, "viseme": v.viseme, "weight": v.weight}
+                    for v in visemes
+                ],
+                "emotion": getattr(result, "detected_emotion", "neutral"),
+            })
+            seq += 1
+
+        # Signal end of VRM audio stream
+        await self._send_json(session.websocket, {"type": "vrm_audio_end"})
+
+    # ═════════════════════════════════════════════════════════════════════
     # Config & Ping
     # ═════════════════════════════════════════════════════════════════════
 
@@ -577,8 +797,14 @@ class WebSocketManager:
             cfg.voice_id = data["voice_id"]
         if "language" in data:
             cfg.language = str(data["language"])
-        if "enable_video" in data:
-            cfg.enable_video = bool(data["enable_video"])
+        if "training_mode" in data:
+            mode = str(data["training_mode"])
+            if mode in ("digital", "human"):
+                cfg.training_mode = mode
+        if "avatar_type" in data:
+            atype = str(data["avatar_type"])
+            if atype in ("video", "vrm"):
+                cfg.avatar_type = atype
 
         logger.info(
             "Session config updated",
@@ -587,7 +813,8 @@ class WebSocketManager:
                 "avatar_id": cfg.avatar_id,
                 "voice_id": cfg.voice_id,
                 "language": cfg.language,
-                "enable_video": cfg.enable_video,
+                "training_mode": cfg.training_mode,
+                "avatar_type": cfg.avatar_type,
             },
         )
 
@@ -596,8 +823,154 @@ class WebSocketManager:
             "avatar_id": cfg.avatar_id,
             "voice_id": cfg.voice_id,
             "language": cfg.language,
-            "enable_video": cfg.enable_video,
+            "training_mode": cfg.training_mode,
+            "avatar_type": cfg.avatar_type,
         })
+
+    async def _handle_training_mode(self, session: Session, data: dict) -> None:
+        """Switch between digital (AI) and human (operator) training mode.
+
+        Args:
+            session: The source session.
+            data: Parsed message with "mode" field ("digital" or "human").
+        """
+        mode = data.get("mode", "")
+        if mode not in ("digital", "human"):
+            await self._send_error(
+                session.websocket,
+                "Invalid training mode",
+                "Mode must be 'digital' or 'human'",
+            )
+            return
+
+        session.config.training_mode = mode
+        await self._send_json(session.websocket, {
+            "type": "training_mode_ack",
+            "mode": mode,
+        })
+
+        logger.info(
+            "Training mode changed",
+            extra={
+                "session_id": session.session_id,
+                "mode": mode,
+            },
+        )
+
+    async def _handle_set_state(self, session: Session, data: dict) -> None:
+        """Manually switch the avatar clip state.
+
+        Args:
+            session: The source session.
+            data: Parsed message with "state" field.
+        """
+        valid_states = {"idle", "thinking", "talking_happy", "talking_sad"}
+        requested = data.get("state", "")
+        if requested not in valid_states:
+            await self._send_error(
+                session.websocket,
+                "Invalid state",
+                f"Valid states: {', '.join(sorted(valid_states))}",
+            )
+            return
+
+        clip_url = f"/clips/{session.config.avatar_id}/{requested}.mp4"
+        await self._send_json(session.websocket, {
+            "type": "body_state",
+            "state": requested,
+            "clip_url": clip_url,
+        })
+
+    async def _handle_stop(self, session: Session, data: dict) -> None:
+        """Return the avatar to idle state.
+
+        Args:
+            session: The source session.
+            data: Parsed message (no additional fields needed).
+        """
+        clip_url = f"/clips/{session.config.avatar_id}/idle.mp4"
+        await self._send_json(session.websocket, {
+            "type": "body_state",
+            "state": "idle",
+            "clip_url": clip_url,
+        })
+
+    async def _handle_video_frame(self, session: Session, data: dict) -> None:
+        """Relay a customer video frame to subscribed operators.
+
+        Args:
+            session: The source session.
+            data: Parsed message with "frame" (base64-encoded image data).
+        """
+        frame = data.get("frame", "")
+        if not frame:
+            return
+
+        if self._operator_manager:
+            await self._operator_manager.relay_video_frame(
+                session.session_id, frame,
+            )
+
+    async def _handle_document_upload(self, session: Session, data: dict) -> None:
+        """Handle a scanned document upload from the customer.
+
+        Args:
+            session: The source session.
+            data: Parsed message with "image" (base64) and "filename".
+        """
+        import base64
+
+        image_b64 = data.get("image", "")
+        filename = data.get("filename", "document.jpg")
+
+        if not image_b64:
+            await self._send_error(
+                session.websocket,
+                "Empty image",
+                "The 'image' field (base64) is required",
+            )
+            return
+
+        try:
+            image_data = base64.b64decode(image_b64)
+        except Exception:
+            await self._send_error(
+                session.websocket,
+                "Invalid image data",
+                "Could not decode base64 image",
+            )
+            return
+
+        # Size limit: 10MB
+        if len(image_data) > 10 * 1024 * 1024:
+            await self._send_error(
+                session.websocket,
+                "Image too large",
+                "Maximum 10MB per document image",
+            )
+            return
+
+        url = ""
+        if self._operator_manager:
+            url = await self._operator_manager.relay_document(
+                session.session_id, image_data, filename,
+            )
+
+        await self._send_json(session.websocket, {
+            "type": "document_saved",
+            "filename": filename,
+            "url": url,
+            "size_bytes": len(image_data),
+        })
+
+        logger.info(
+            "Document uploaded",
+            extra={
+                "session_id": session.session_id,
+                "filename": filename,
+                "size_bytes": len(image_data),
+            },
+        )
 
     async def _handle_ping(self, session: Session, data: dict) -> None:
         """Respond to a client ping with a pong.
@@ -685,6 +1058,8 @@ async def _authenticate_websocket(
     # Wait for auth message with 5 second timeout
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        if len(raw) > 4096:  # Auth messages should be tiny
+            return False
         data = _json.loads(raw)
         client_key = data.get("api_key", "")
         if data.get("type") == "auth" and client_key and _hmac.compare_digest(client_key, api_key):

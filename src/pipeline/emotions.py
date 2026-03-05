@@ -63,6 +63,107 @@ ARABIC_EMOTION_KEYWORDS: dict[str, list[str]] = {
 
 
 @dataclass
+class MotionParams:
+    """Structured animation data for GPU Render Node.
+
+    GPU Node uses these to drive LivePortrait face animation.
+    """
+
+    expression: str = "neutral"
+    head_pose: dict[str, float] = None  # type: ignore[assignment]
+    eye_blink: float = 0.2
+    smile_weight: float = 0.0
+    head_nod: bool = False
+    eye_contact: bool = True
+    idle_animation: bool = False
+
+    def __post_init__(self) -> None:
+        if self.head_pose is None:
+            self.head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}
+
+    def to_dict(self) -> dict:
+        """Serialize to JSON-safe dict for WebSocket transport."""
+        return {
+            "expression": self.expression,
+            "head_pose": self.head_pose,
+            "eye_blink": self.eye_blink,
+            "smile_weight": self.smile_weight,
+            "head_nod": self.head_nod,
+            "eye_contact": self.eye_contact,
+            "idle_animation": self.idle_animation,
+        }
+
+
+# Emotion → motion parameter mapping
+EMOTION_MOTION_MAP: dict[str, dict] = {
+    "neutral": {
+        "expression": "neutral_pleasant",
+        "head_pose": {"yaw": 0, "pitch": 0, "roll": 0},
+        "eye_blink": 0.2,
+        "smile_weight": 0.2,
+        "head_nod": False,
+        "eye_contact": True,
+    },
+    "happy": {
+        "expression": "smile",
+        "head_pose": {"yaw": 0, "pitch": 0, "roll": 0},
+        "eye_blink": 0.15,
+        "smile_weight": 0.7,
+        "head_nod": True,
+        "eye_contact": True,
+    },
+    "sad": {
+        "expression": "sad",
+        "head_pose": {"yaw": 0, "pitch": -3, "roll": 0},
+        "eye_blink": 0.4,
+        "smile_weight": 0.0,
+        "head_nod": False,
+        "eye_contact": False,
+    },
+    "angry": {
+        "expression": "angry",
+        "head_pose": {"yaw": -5, "pitch": 2, "roll": 0},
+        "eye_blink": 0.1,
+        "smile_weight": 0.0,
+        "head_nod": False,
+        "eye_contact": True,
+    },
+    "surprised": {
+        "expression": "surprised",
+        "head_pose": {"yaw": 0, "pitch": 3, "roll": 0},
+        "eye_blink": 0.05,
+        "smile_weight": 0.3,
+        "head_nod": False,
+        "eye_contact": True,
+    },
+    "fearful": {
+        "expression": "fearful",
+        "head_pose": {"yaw": -3, "pitch": -2, "roll": 0},
+        "eye_blink": 0.5,
+        "smile_weight": 0.0,
+        "head_nod": False,
+        "eye_contact": False,
+    },
+    "disgusted": {
+        "expression": "disgusted",
+        "head_pose": {"yaw": -2, "pitch": 1, "roll": 0},
+        "eye_blink": 0.3,
+        "smile_weight": 0.0,
+        "head_nod": False,
+        "eye_contact": True,
+    },
+    "contempt": {
+        "expression": "contempt",
+        "head_pose": {"yaw": 3, "pitch": 2, "roll": 2},
+        "eye_blink": 0.2,
+        "smile_weight": 0.1,
+        "head_nod": False,
+        "eye_contact": True,
+    },
+}
+
+
+@dataclass
 class EmotionResult:
     """Result of emotion detection.
 
@@ -124,7 +225,7 @@ class EmotionEngine:
                 "text-classification",
                 model="j-hartmann/emotion-english-distilroberta-base",
                 top_k=None,
-                device=0 if self._config.video_device == "cuda" else -1,
+                device=-1,  # Always CPU — no GPU required
             )
             self._loaded = True
             logger.info("Emotion model loaded (transformer-based)")
@@ -293,6 +394,93 @@ class EmotionEngine:
             "neutral": "neutral",
         }
         return mapping.get(label, label if label in EMOTION_LABELS else "neutral")
+
+    # ═════════════════════════════════════════════════════════════════════
+    # Motion Params Generation (for GPU Render Node)
+    # ═════════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def get_motion_params(emotion: str) -> MotionParams:
+        """Map an emotion label to structured animation parameters.
+
+        Args:
+            emotion: Emotion label (happy, sad, angry, etc.).
+
+        Returns:
+            MotionParams for GPU Node face animation.
+        """
+        params = EMOTION_MOTION_MAP.get(emotion, EMOTION_MOTION_MAP["neutral"])
+        return MotionParams(
+            expression=params["expression"],
+            head_pose=dict(params["head_pose"]),
+            eye_blink=params["eye_blink"],
+            smile_weight=params["smile_weight"],
+            head_nod=params["head_nod"],
+            eye_contact=params["eye_contact"],
+        )
+
+    @staticmethod
+    def get_thinking_motion() -> MotionParams:
+        """Get motion params for the 'thinking' state.
+
+        Contemplative pose: head tilted, eyes looking up-right.
+        """
+        return MotionParams(
+            expression="contemplative",
+            head_pose={"yaw": 8.0, "pitch": 5.0, "roll": 0.0},
+            eye_blink=0.3,
+            smile_weight=0.1,
+            head_nod=False,
+            eye_contact=False,
+        )
+
+    @staticmethod
+    def get_idle_motion() -> MotionParams:
+        """Get motion params for the idle/rest state."""
+        return MotionParams(
+            expression="neutral_pleasant",
+            head_pose={"yaw": 0.0, "pitch": 0.0, "roll": 0.0},
+            eye_blink=0.2,
+            smile_weight=0.15,
+            head_nod=False,
+            eye_contact=True,
+            idle_animation=True,
+        )
+
+    @staticmethod
+    def get_micro_motion(emotion: str, seq: int) -> dict:
+        """Generate per-chunk subtle motion deltas.
+
+        Adds natural micro-movements that vary by sequence number
+        to avoid a frozen/robotic look during speech.
+
+        Args:
+            emotion: Current emotion label.
+            seq: Audio chunk sequence number.
+
+        Returns:
+            Dict with head_pose delta and expression_delta.
+        """
+        import math
+
+        # Subtle sinusoidal head sway
+        yaw_delta = 1.5 * math.sin(seq * 0.7)
+        pitch_delta = 0.8 * math.cos(seq * 0.5)
+
+        # Smile micro-variation based on emotion
+        base_smile = EMOTION_MOTION_MAP.get(emotion, EMOTION_MOTION_MAP["neutral"])["smile_weight"]
+        smile_delta = 0.05 * math.sin(seq * 1.1)
+
+        return {
+            "head_pose": {
+                "yaw": round(yaw_delta, 2),
+                "pitch": round(pitch_delta, 2),
+                "roll": 0.0,
+            },
+            "expression_delta": {
+                "smile": round(smile_delta, 3),
+            },
+        }
 
     def unload(self) -> None:
         """Free resources by unloading the emotion model."""

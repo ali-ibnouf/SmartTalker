@@ -110,20 +110,6 @@ class TestLayerExceptions:
         assert "TTS" in exc.message
         assert isinstance(exc, SmartTalkerError)
 
-    def test_video_error(self):
-        """VideoError has correct default message."""
-        from src.utils.exceptions import VideoError, SmartTalkerError
-        exc = VideoError()
-        assert "Video" in exc.message
-        assert isinstance(exc, SmartTalkerError)
-
-    def test_upscale_error(self):
-        """UpscaleError has correct default message."""
-        from src.utils.exceptions import UpscaleError, SmartTalkerError
-        exc = UpscaleError()
-        assert "Upscale" in exc.message
-        assert isinstance(exc, SmartTalkerError)
-
     def test_storage_error(self):
         """StorageError has correct default message."""
         from src.utils.exceptions import StorageError, SmartTalkerError
@@ -226,7 +212,7 @@ class TestStorageManager:
         from src.integrations.storage import StorageManager
         StorageManager(config)
         base = config.storage_base_dir
-        for subdir in ["tts", "video", "upscale", "uploads", "whatsapp_media"]:
+        for subdir in ["tts", "uploads", "whatsapp_media"]:
             assert (base / subdir).is_dir()
 
     def test_get_stats_empty(self, config):
@@ -322,13 +308,11 @@ class TestStorageManager:
 
         # Create files in multiple subdirs
         (config.storage_base_dir / "tts" / "a.wav").write_bytes(b"\x00")
-        (config.storage_base_dir / "video" / "b.mp4").write_bytes(b"\x00")
 
         manager.clear_all()
 
         # Verify files are gone but directories remain
         assert not (config.storage_base_dir / "tts" / "a.wav").exists()
-        assert not (config.storage_base_dir / "video" / "b.mp4").exists()
         assert (config.storage_base_dir / "tts").is_dir()
 
 

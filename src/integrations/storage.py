@@ -1,7 +1,7 @@
 """Local file storage manager.
 
 Handles output file cleanup, path resolution,
-and storage statistics for generated audio/video files.
+and storage statistics for generated audio files.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ class StorageManager:
         self._max_age_hours = config.storage_max_file_age_hours
 
         # Ensure all output subdirectories exist
-        for subdir in ["tts", "video", "upscale", "uploads", "whatsapp_media"]:
+        for subdir in ["tts", "uploads", "whatsapp_media"]:
             (self._base_dir / subdir).mkdir(parents=True, exist_ok=True)
 
         logger.info(
