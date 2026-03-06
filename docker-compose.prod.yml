@@ -57,7 +57,7 @@ services:
       - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-agent@yourdomain.com}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -69,24 +69,50 @@ services:
       context: .
       dockerfile: Dockerfile.agent
     container_name: smarttalker-ai-agent
-    restart: unless-stopped
+    restart: always
     environment:
       - DATABASE_URL=postgresql+asyncpg://smarttalker:${POSTGRES_PASSWORD}@postgres:5432/smarttalker
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - ALERT_EMAIL=contact@lsmarttech.com
+      # DashScope (health checks + LLM calls)
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL}
+      - LLM_MODEL=${LLM_MODEL}
+      # RunPod (endpoint monitoring)
       - RUNPOD_API_KEY=${RUNPOD_API_KEY}
       - RUNPOD_ENDPOINT_MUSETALK=${RUNPOD_ENDPOINT_MUSETALK}
       - RUNPOD_ENDPOINT_PREPROCESS=${RUNPOD_ENDPOINT_PREPROCESS}
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      # R2 (connectivity checks)
+      - R2_ENDPOINT_URL=${R2_ENDPOINT_URL}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET=${R2_BUCKET:-maskki-media}
-      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
+      # Agent config
       - AGENT_AGENT_ENABLED=true
       - AGENT_AUTO_FIX_ENABLED=true
       - AGENT_SCAN_INTERVAL_S=60
+      - AGENT_AUDIT_LOG_PATH=/app/logs/agent_audit.jsonl
+      - AGENT_NOTIFICATION_EMAIL_ENABLED=${AGENT_NOTIFICATION_EMAIL_ENABLED:-true}
+      - AGENT_NOTIFICATION_EMAIL_TO=${AGENT_NOTIFICATION_EMAIL_TO:-contact@lsmarttech.com}
+      # SMTP (for email alerts)
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-agent@lsmarttech.com}
     depends_on:
       - postgres
       - redis
+    volumes:
+      - ./logs/agent:/app/logs
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks:
       - smarttalker-net
 
@@ -113,7 +139,7 @@ services:
     ports: !reset []
     # No host port exposure in production — only reachable via internal network
 
-  # ── Alertmanager ──────────────────────────────────────────────────
+    # ── Alertmanager ──────────────────────────────────────────────────
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: smarttalker-alertmanager
