@@ -722,6 +722,16 @@ class TestAdminJourney:
 
         mock_config = MagicMock()
         mock_config.billing_enabled = False
+        # Set string values for infrastructure monitor rules to avoid
+        # MagicMock objects in Detection.details (not JSON serializable)
+        mock_config.runpod_endpoint_url = ""
+        mock_config.runpod_endpoint_musetalk = ""
+        mock_config.runpod_endpoint_preprocess = ""
+        mock_config.runpod_api_key = ""
+        mock_config.r2_bucket_name = ""
+        mock_config.r2_endpoint_url = ""
+        mock_config.r2_access_key_id = ""
+        mock_config.r2_secret_access_key = ""
 
         ctx = AgentContext(
             db=None,

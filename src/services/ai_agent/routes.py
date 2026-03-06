@@ -9,6 +9,9 @@ from fastapi.responses import JSONResponse
 
 from src.services.ai_agent.schemas import (
     AgentStatsResponse,
+    ApprovalActionResponse,
+    ApprovalItem,
+    ApprovalListResponse,
     DetectionItem,
     IncidentActionResponse,
     IncidentItem,
@@ -184,3 +187,51 @@ async def get_customer_health_detail(customer_id: str, request: Request):
         "risk_level": score.risk_level,
         "scored_at": score.scored_at,
     })
+
+
+# ── Approval Queue ────────────────────────────────────────────────────────
+
+
+def _get_approval_queue(request: Request):
+    """Retrieve ApprovalQueue from app state."""
+    return getattr(request.app.state, "approval_queue", None)
+
+
+@router.get("/approvals", response_model=ApprovalListResponse)
+async def list_approvals(request: Request, limit: int = 50):
+    """List pending approval requests."""
+    queue = _get_approval_queue(request)
+    if queue is None:
+        return ApprovalListResponse()
+    pending = await queue.list_pending(limit=limit)
+    return ApprovalListResponse(
+        approvals=[ApprovalItem(**a) for a in pending],
+        count=len(pending),
+    )
+
+
+@router.post("/approvals/{approval_id}/approve", response_model=ApprovalActionResponse)
+async def approve_action(request: Request, approval_id: str):
+    """Approve and execute a pending action."""
+    queue = _get_approval_queue(request)
+    if queue is None:
+        return ApprovalActionResponse(approval_id=approval_id, status="error")
+    result = await queue.approve(approval_id, reviewed_by="admin")
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return ApprovalActionResponse(**result)
+
+
+@router.post("/approvals/{approval_id}/reject", response_model=ApprovalActionResponse)
+async def reject_action(request: Request, approval_id: str):
+    """Reject a pending action."""
+    queue = _get_approval_queue(request)
+    if queue is None:
+        return ApprovalActionResponse(approval_id=approval_id, status="error")
+    result = await queue.reject(approval_id, reviewed_by="admin")
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return ApprovalActionResponse(
+        approval_id=result["approval_id"],
+        status=result["status"],
+    )

@@ -1,0 +1,25 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\User\AppData\Local\Programs\Python\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\User\Documents\smart talker\SmartTalker
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 0 items / 1 error
+
+=================================== ERRORS ====================================
+__ ERROR collecting models/cosyvoice/CosyVoice/examples/libritts/cosyvoice2 ___
+..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\pluggy\_hooks.py:512: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\pluggy\_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\_pytest\main.py:455: in pytest_ignore_collect
+    if collection_path.is_dir():
+..\..\..\AppData\Local\Programs\Python\Python310\lib\pathlib.py:1305: in is_dir
+    return S_ISDIR(self.stat().st_mode)
+..\..\..\AppData\Local\Programs\Python\Python310\lib\pathlib.py:1097: in stat
+    return self._accessor.stat(self, follow_symlinks=follow_symlinks)
+E   OSError: [WinError 1920] The file cannot be accessed by the system: 'C:\\Users\\User\\Documents\\smart talker\\SmartTalker\\models\\cosyvoice\\CosyVoice\\examples\\libritts\\cosyvoice2\\local'
+=========================== short test summary info ===========================
+ERROR models/cosyvoice/CosyVoice/examples/libritts/cosyvoice2 - OSError: [WinError 1920] The file cannot be accessed by the system: 'C:\\Users\\User\\Documents\\smart talker\\SmartTalker\\models\\cosyvoice\\CosyVoice\\examples\\libritts\\cosyvoice2\\local'
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+============================== 1 error in 0.14s ===============================

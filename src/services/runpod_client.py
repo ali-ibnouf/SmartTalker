@@ -68,6 +68,19 @@ class RunPodServerless:
         self._endpoint_preprocess = config.runpod_endpoint_preprocess
         self._client: Optional[httpx.AsyncClient] = None
 
+        # Rolling buffers for monitoring
+        from collections import deque
+        self._recent_render_times: deque[float] = deque(maxlen=50)  # seconds (all tasks)
+        self._recent_preprocess_times: deque[float] = deque(maxlen=50)  # preprocess_face only
+        self._recent_lipsync_times: deque[float] = deque(maxlen=50)  # render_lipsync only
+        self._recent_r2_latencies: deque[float] = deque(maxlen=50)  # R2 upload seconds
+        self._recent_timeouts: deque[float] = deque(maxlen=20)  # timeout timestamps
+        self._recent_failures: deque[float] = deque(maxlen=20)  # failure timestamps
+
+        # Consecutive failure tracking (for agent escalation)
+        self._consecutive_failures: int = 0
+        self.video_disabled: bool = False  # Set by agent auto-fix after 3+ failures
+
         logger.info(
             "RunPodServerless initialized",
             extra={
@@ -113,7 +126,7 @@ class RunPodServerless:
             }
         }
 
-        result = await self._run_job(self._endpoint_preprocess, body)
+        result = await self._run_job(self._endpoint_preprocess, body, task_type="preprocess_face")
 
         face_data_url = result.get("face_data_url", "")
         if not face_data_url:
@@ -165,7 +178,7 @@ class RunPodServerless:
             }
         }
 
-        result = await self._run_job(self._endpoint_musetalk, body)
+        result = await self._run_job(self._endpoint_musetalk, body, task_type="render_lipsync")
 
         video_url = result.get("video_url", "")
         if not video_url:
@@ -189,17 +202,60 @@ class RunPodServerless:
         endpoint: str,
         body: dict[str, Any],
         timeout: float = DEFAULT_TIMEOUT,
+        task_type: str = "",
+        max_retries: int = 2,
     ) -> dict[str, Any]:
         """Submit a job to RunPod and poll for completion.
+
+        On FAILED status, retries up to max_retries times before raising.
+        Tracks consecutive failures for agent escalation monitoring.
 
         Args:
             endpoint: RunPod endpoint URL (e.g. https://api.runpod.ai/v2/{id}).
             body: Job input payload.
             timeout: Maximum wait time in seconds.
+            task_type: Task identifier for per-type metrics tracking.
+            max_retries: Max retry attempts on job FAILED status.
 
         Returns:
             Job output dict from RunPod.
         """
+        last_error: Optional[RunPodError] = None
+
+        for attempt in range(1 + max_retries):
+            try:
+                result = await self._run_job_once(
+                    endpoint, body, timeout, task_type,
+                )
+                # Success — reset consecutive failure counter
+                self._consecutive_failures = 0
+                return result
+            except RunPodError as exc:
+                last_error = exc
+                is_job_failure = "job failed" in str(exc.message).lower()
+                if is_job_failure and attempt < max_retries:
+                    logger.warning(
+                        f"RunPod job failed (attempt {attempt + 1}/{1 + max_retries}), retrying",
+                        extra={"task_type": task_type, "error": str(exc.message)},
+                    )
+                    await asyncio.sleep(1.0 * (attempt + 1))  # 1s, 2s backoff
+                    continue
+                # Not retriable or exhausted retries
+                self._consecutive_failures += 1
+                raise
+
+        # Should not reach here, but just in case
+        self._consecutive_failures += 1
+        raise last_error  # type: ignore[misc]
+
+    async def _run_job_once(
+        self,
+        endpoint: str,
+        body: dict[str, Any],
+        timeout: float,
+        task_type: str,
+    ) -> dict[str, Any]:
+        """Submit and poll a single job attempt."""
         client = await self._get_client()
         start = time.perf_counter()
 
@@ -209,12 +265,14 @@ class RunPodServerless:
             submit_resp.raise_for_status()
             submit_data = submit_resp.json()
         except httpx.HTTPStatusError as exc:
+            self._recent_failures.append(time.time())
             raise RunPodError(
                 message=f"RunPod job submission failed: {exc.response.status_code}",
                 detail=exc.response.text,
                 original_exception=exc,
             ) from exc
         except Exception as exc:
+            self._recent_failures.append(time.time())
             raise RunPodError(
                 message="RunPod job submission failed",
                 detail=str(exc),
@@ -235,6 +293,7 @@ class RunPodServerless:
         while True:
             elapsed = time.perf_counter() - start
             if elapsed > timeout:
+                self._recent_timeouts.append(time.time())
                 raise RunPodError(
                     message=f"RunPod job timed out after {timeout}s",
                     detail=f"job_id={job_id}",
@@ -254,16 +313,30 @@ class RunPodServerless:
             if status == "COMPLETED":
                 output = status_data.get("output", {})
                 execution_ms = int((time.perf_counter() - start) * 1000)
+                execution_s = execution_ms / 1000.0
                 output["execution_time_ms"] = execution_ms
                 output["job_id"] = job_id
 
+                # Record metrics per task type
+                self._recent_render_times.append(execution_s)
+                if task_type == "preprocess_face":
+                    self._recent_preprocess_times.append(execution_s)
+                elif task_type == "render_lipsync":
+                    self._recent_lipsync_times.append(execution_s)
+
+                # Record R2 upload latency if worker reported it
+                r2_upload_ms = output.get("r2_upload_ms")
+                if r2_upload_ms is not None:
+                    self._recent_r2_latencies.append(r2_upload_ms / 1000.0)
+
                 log_with_latency(
                     logger, "RunPod job completed", execution_ms,
-                    extra={"job_id": job_id},
+                    extra={"job_id": job_id, "task_type": task_type},
                 )
                 return output
 
             elif status == "FAILED":
+                self._recent_failures.append(time.time())
                 error = status_data.get("error", "Unknown error")
                 raise RunPodError(
                     message=f"RunPod job failed: {error}",
@@ -271,6 +344,10 @@ class RunPodServerless:
                 )
 
             elif status in ("CANCELLED", "TIMED_OUT"):
+                if status == "TIMED_OUT":
+                    self._recent_timeouts.append(time.time())
+                else:
+                    self._recent_failures.append(time.time())
                 raise RunPodError(
                     message=f"RunPod job {status.lower()}",
                     detail=f"job_id={job_id}",

@@ -339,6 +339,25 @@ class OperatorWebSocketManager:
                     except Exception as sup_exc:
                         logger.warning(f"Failed to record supervisor action: {sup_exc}")
 
+                # Synthesize operator text through cloned voice (fire-and-forget)
+                if data.get("use_voice", True) and customer_session.ai_paused:
+                    try:
+                        from src.agent.operator_takeover import synthesize_operator_message
+                        import asyncio
+
+                        avatar = getattr(customer_session.config, "avatar", None)
+                        asyncio.create_task(synthesize_operator_message(
+                            text=text,
+                            pipeline=self._pipeline,
+                            avatar=avatar,
+                            session_id=session_id,
+                            employee_id=getattr(customer_session.config, "avatar_id", ""),
+                            customer_ws=customer_session.websocket,
+                            app=None,
+                        ))
+                    except Exception as voice_exc:
+                        logger.debug(f"Voice synthesis skipped: {voice_exc}")
+
                 # If learn_skill_id is provided, record as training Q&A
                 learn_skill_id = data.get("learn_skill_id", "")
                 question = data.get("original_question", "")

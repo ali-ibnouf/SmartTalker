@@ -184,6 +184,11 @@ class TTSEngine:
         self._voices: dict[str, VoiceInfo] = {}
         self._http_client: Optional[httpx.AsyncClient] = None
 
+        # Rolling buffers for monitoring
+        from collections import deque
+        self._recent_latencies: deque[float] = deque(maxlen=50)
+        self._recent_errors: deque[float] = deque(maxlen=20)  # timestamps of WS failures
+
         logger.info(
             "TTSEngine initialized (DashScope WebSocket)",
             extra={"model": self._model},
@@ -368,8 +373,10 @@ class TTSEngine:
             return TTSStream(ws)
 
         except TTSError:
+            self._recent_errors.append(time.time())
             raise
         except Exception as exc:
+            self._recent_errors.append(time.time())
             raise TTSError(
                 message="Failed to start TTS stream",
                 detail=str(exc),
@@ -397,6 +404,7 @@ class TTSEngine:
         all_audio = await stream.collect_all()
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
+        self._recent_latencies.append(elapsed_ms / 1000.0)
 
         # Save to WAV file
         output_dir = self._config.storage_base_dir / "tts"

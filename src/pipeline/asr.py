@@ -155,6 +155,11 @@ class ASREngine:
         self._model = config.asr_model
         self._loaded = True  # No local model to load — always ready
 
+        # Rolling buffers for monitoring
+        from collections import deque
+        self._recent_latencies: deque[float] = deque(maxlen=50)
+        self._recent_errors: deque[float] = deque(maxlen=20)  # timestamps of WS failures
+
         logger.info(
             "ASREngine initialized (DashScope WebSocket)",
             extra={"model": self._model, "ws_url": self._ws_url},
@@ -228,8 +233,10 @@ class ASREngine:
             return ASRSession(ws, session_id, language)
 
         except ASRError:
+            self._recent_errors.append(time.time())
             raise
         except Exception as exc:
+            self._recent_errors.append(time.time())
             raise ASRError(
                 message="Failed to create ASR session",
                 detail=str(exc),
@@ -269,6 +276,7 @@ class ASREngine:
 
         result = await session.finish()
         result.latency_ms = int((time.perf_counter() - start) * 1000)
+        self._recent_latencies.append(result.latency_ms / 1000.0)
 
         log_with_latency(
             logger,

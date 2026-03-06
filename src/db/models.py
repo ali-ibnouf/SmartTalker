@@ -104,6 +104,8 @@ class Subscription(Base):
     max_concurrent_sessions: Mapped[int] = mapped_column(Integer, default=1)
     price_monthly: Mapped[float] = mapped_column(Float, default=50.0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    payment_failures: Mapped[int] = mapped_column(Integer, default=0)
+    grace_period_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     starts_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -547,6 +549,27 @@ class AgentAction(Base):
     )
 
 
+class AgentApproval(Base):
+    __tablename__ = "agent_approvals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    action_type: Mapped[str] = mapped_column(String(100), nullable=False)  # suspend_customer, kill_switch, plan_downgrade, data_deletion
+    target_id: Mapped[str] = mapped_column(String(100), nullable=False)  # customer_id or entity affected
+    description: Mapped[str] = mapped_column(Text, default="")
+    details: Mapped[str] = mapped_column(Text, default="{}")  # JSON
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected, expired
+    requested_by: Mapped[str] = mapped_column(String(100), default="agent")  # agent or rule_id
+    reviewed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_agent_approvals_status", "status"),
+        Index("idx_agent_approvals_created", "created_at"),
+    )
+
+
 class AgentPattern(Base):
     __tablename__ = "agent_patterns"
 
@@ -893,4 +916,46 @@ class APICostRecord(Base):
         Index("idx_acr_customer", "customer_id"),
         Index("idx_acr_session", "session_id"),
         Index("idx_acr_created", "created_at"),
+    )
+
+
+# =============================================================================
+# Phase 3: Cross-Learning & Industry Categories
+# =============================================================================
+
+
+class IndustryCategory(Base):
+    """Industry category with shared knowledge templates."""
+    __tablename__ = "industry_categories"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    default_qa_pairs: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of {q, a}
+    default_personality: Mapped[str] = mapped_column(Text, default="{}")  # JSON
+    employee_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_ic_slug", "slug"),
+    )
+
+
+class EmployeeIndustry(Base):
+    """N:M mapping between employees and industries."""
+    __tablename__ = "employee_industries"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    employee_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("employees.id"), nullable=False
+    )
+    industry_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("industry_categories.id"), nullable=False
+    )
+    adopted_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_ei_employee", "employee_id"),
+        Index("idx_ei_industry", "industry_id"),
     )

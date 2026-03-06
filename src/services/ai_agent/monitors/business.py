@@ -148,6 +148,178 @@ class QuotaExhaustionRule:
         return detections
 
 
+class FailedPaymentRule:
+    """Detects customers with multiple failed payment attempts."""
+
+    rule_id = "business.failed_payment"
+
+    async def evaluate(self, ctx: AgentContext) -> list[Detection]:
+        if ctx.db is None:
+            return []
+
+        detections: list[Detection] = []
+        threshold = ctx.agent_config.failed_payment_threshold
+
+        try:
+            from sqlalchemy import select
+            from src.db.models import Customer, Subscription
+
+            async with ctx.db.session_ctx() as session:
+                stmt = (
+                    select(
+                        Customer.id, Customer.name,
+                        Subscription.plan, Subscription.payment_failures,
+                    )
+                    .join(Subscription, Subscription.customer_id == Customer.id)
+                    .where(Customer.is_active == True)  # noqa: E712
+                    .where(Subscription.is_active == True)  # noqa: E712
+                    .where(Subscription.payment_failures >= threshold)
+                )
+                result = await session.execute(stmt)
+                for row in result.all():
+                    cid, cname, plan, failures = row
+                    severity = "critical" if failures >= 3 else "warning"
+                    detections.append(Detection(
+                        rule_id=self.rule_id,
+                        severity=severity,
+                        title=f"Payment failures: {cname} ({failures}x)",
+                        description=(
+                            f"{cname} ({plan} plan) has {failures} failed payment "
+                            f"attempts. Risk of service disruption."
+                        ),
+                        details={
+                            "customer_id": cid,
+                            "customer_name": cname,
+                            "plan": plan,
+                            "failures": failures,
+                        },
+                        recommendation=(
+                            "Send payment reminder. If 3+ failures, "
+                            "consider account suspension via approval queue."
+                        ),
+                        auto_fixable=failures < 3,
+                    ))
+        except Exception as exc:
+            logger.error(f"FailedPaymentRule failed: {exc}")
+
+        return detections
+
+
+class TrainingStallRule:
+    """Detects avatars with stalled training progress."""
+
+    rule_id = "business.training_stall"
+
+    async def evaluate(self, ctx: AgentContext) -> list[Detection]:
+        if ctx.db is None:
+            return []
+
+        detections: list[Detection] = []
+        stall_days = ctx.agent_config.training_stall_days
+
+        try:
+            from sqlalchemy import select
+            from src.db.models import Avatar, Customer
+
+            cutoff = datetime.utcnow() - timedelta(days=stall_days)
+
+            async with ctx.db.session_ctx() as session:
+                stmt = (
+                    select(Avatar, Customer.name)
+                    .join(Customer, Customer.id == Avatar.customer_id)
+                    .where(Customer.is_active == True)  # noqa: E712
+                    .where(Avatar.training_progress < 0.8)
+                    .where(Avatar.training_progress > 0.0)
+                    .where(Avatar.updated_at <= cutoff)
+                )
+                result = await session.execute(stmt)
+                for avatar, customer_name in result.all():
+                    detections.append(Detection(
+                        rule_id=self.rule_id,
+                        severity="warning",
+                        title=f"Training stalled: {avatar.name} ({avatar.training_progress*100:.0f}%)",
+                        description=(
+                            f"Avatar '{avatar.name}' for {customer_name} at "
+                            f"{avatar.training_progress*100:.0f}% training for "
+                            f">{stall_days} days."
+                        ),
+                        details={
+                            "avatar_id": avatar.id,
+                            "avatar_name": avatar.name,
+                            "customer_name": customer_name,
+                            "training_progress": avatar.training_progress,
+                            "stall_days": stall_days,
+                        },
+                        recommendation=(
+                            "Reach out with training tips. Consider assigning "
+                            "industry knowledge to jumpstart progress."
+                        ),
+                    ))
+        except Exception as exc:
+            logger.error(f"TrainingStallRule failed: {exc}")
+
+        return detections
+
+
+class OnboardingStuckRule:
+    """Detects new customers who haven't started using the platform."""
+
+    rule_id = "business.onboarding_stuck"
+
+    async def evaluate(self, ctx: AgentContext) -> list[Detection]:
+        if ctx.db is None:
+            return []
+
+        detections: list[Detection] = []
+        stuck_hours = ctx.agent_config.onboarding_stuck_hours
+
+        try:
+            from sqlalchemy import func, select
+            from src.db.models import Avatar, Conversation, Customer
+
+            cutoff = datetime.utcnow() - timedelta(hours=stuck_hours)
+
+            async with ctx.db.session_ctx() as session:
+                # Conversation -> Avatar -> Customer to find who has conversations
+                has_convos = (
+                    select(Avatar.customer_id)
+                    .join(Conversation, Conversation.avatar_id == Avatar.id)
+                    .distinct()
+                    .subquery()
+                )
+                stmt = (
+                    select(Customer)
+                    .where(Customer.is_active == True)  # noqa: E712
+                    .where(Customer.created_at <= cutoff)
+                    .where(Customer.id.notin_(select(has_convos.c.customer_id)))
+                )
+                result = await session.execute(stmt)
+                for customer in result.scalars().all():
+                    age_hours = (datetime.utcnow() - customer.created_at).total_seconds() / 3600
+                    detections.append(Detection(
+                        rule_id=self.rule_id,
+                        severity="warning",
+                        title=f"Onboarding stuck: {customer.name}",
+                        description=(
+                            f"{customer.name} signed up {age_hours:.0f}h ago "
+                            f"with zero conversations."
+                        ),
+                        details={
+                            "customer_id": customer.id,
+                            "customer_name": customer.name,
+                            "age_hours": round(age_hours),
+                        },
+                        recommendation=(
+                            "Send onboarding email with getting-started guide. "
+                            "Consider assigning a demo avatar."
+                        ),
+                    ))
+        except Exception as exc:
+            logger.error(f"OnboardingStuckRule failed: {exc}")
+
+        return detections
+
+
 class EscalationSpikeRule:
     """Detects avatars with abnormally high escalation rates."""
 

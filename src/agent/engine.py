@@ -958,6 +958,20 @@ class AgentEngine:
                 error="Tool has no api_url configured",
             )
 
+        # SSRF protection — block internal/private URLs
+        from src.agent.security import validate_tool_url, sanitize_tool_input
+        if not validate_tool_url(tool.api_url):
+            logger.warning(
+                "SSRF blocked: custom tool URL points to internal network",
+                extra={"tool_id": tool.tool_id, "url": tool.api_url},
+            )
+            return ToolResult(
+                tool_id=tool.tool_id,
+                success=False,
+                error=f"URL blocked by SSRF protection: {tool.api_url}",
+            )
+        input_data = sanitize_tool_input(input_data)
+
         method = (tool.api_method or "POST").upper()
         headers = self._parse_json_field(tool.api_headers)
         timeout_s = (tool.timeout_ms or 5000) / 1000.0

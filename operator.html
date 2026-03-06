@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maskki — Operator Dashboard</title>
+  <style>
+    /* ================================================================
+       Maskki Operator Dashboard — Embedded Design System
+       ================================================================ */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #07090E;
+      --bg-secondary: #0D1117;
+      --bg-card: #111820;
+      --bg-card-hover: #161E29;
+      --accent: #00D4AA;
+      --accent-dim: #00A88A;
+      --accent-glow: rgba(0, 212, 170, 0.15);
+      --accent-2: #6C5CE7;
+      --accent-3: #00B4D8;
+      --text-primary: #F0F2F5;
+      --text-secondary: #8B95A5;
+      --text-dim: #5A6577;
+      --border: rgba(255,255,255,0.06);
+      --border-accent: rgba(0, 212, 170, 0.2);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --status-normal: #00D4AA;
+      --status-escalated: #F0B429;
+      --status-critical: #E53E3E;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    /* Noise overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 3px; }
+
+    /* ================================================================
+       Layout
+       ================================================================ */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 56px;
+      min-height: 56px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #00D4AA, #6C5CE7, #00B4D8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .header-title span {
+      color: var(--accent);
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-critical);
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected {
+      background: var(--status-normal);
+      box-shadow: 0 0 8px rgba(0, 212, 170, 0.5);
+    }
+
+    .status-dot.connecting {
+      background: var(--status-escalated);
+      animation: pulse-dot 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Config bar */
+    .config-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 20px;
+      background: rgba(13, 17, 23, 0.8);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .config-bar label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .config-bar input[type="text"],
+    .config-bar input[type="password"] {
+      flex: 1;
+      max-width: 280px;
+      padding: 5px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .config-bar input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      padding: 5px 14px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-accent {
+      background: var(--accent);
+      color: var(--bg-primary);
+    }
+
+    .btn-accent:hover {
+      background: var(--accent-dim);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+    }
+
+    /* Main area */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ================================================================
+       Left Panel — Session List
+       ================================================================ */
+    .panel-left {
+      width: 300px;
+      min-width: 300px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .panel-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+
+    .session-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .session-card {
+      padding: 12px;
+      margin-bottom: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .session-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(255,255,255,0.1);
+    }
+
+    .session-card.active {
+      border-color: var(--accent);
+      background: rgba(0, 212, 170, 0.05);
+    }
+
+    .session-card.escalated {
+      border-left: 3px solid var(--status-escalated);
+    }
+
+    .session-card.critical {
+      border-left: 3px solid var(--status-critical);
+    }
+
+    .session-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .session-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 160px;
+    }
+
+    .session-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .session-status-dot.normal { background: var(--status-normal); }
+    .session-status-dot.escalated { background: var(--status-escalated); }
+    .session-status-dot.critical { background: var(--status-critical); }
+
+    .session-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .session-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .session-avatar-name {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .session-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--text-dim);
+      font-size: 13px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .session-empty-icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+      opacity: 0.4;
+    }
+
+    /* ================================================================
+       Center Panel — Conversation
+       ================================================================ */
+    .panel-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    .conversation-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-secondary);
+    }
+
+    .conversation-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .conversation-subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .conversation-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .conversation-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .conversation-empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .message {
+      margin-bottom: 16px;
+      max-width: 75%;
+      animation: msg-in 0.25s ease-out;
+    }
+
+    @keyframes msg-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      margin-left: 0;
+    }
+
+    .message.bot {
+      margin-left: auto;
+    }
+
+    .message.operator {
+      margin-left: auto;
+    }
+
+    .message-label {
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .message.user .message-label { color: var(--accent-3); }
+    .message.bot .message-label { color: var(--accent-2); text-align: right; justify-content: flex-end; }
+    .message.operator .message-label { color: var(--status-escalated); text-align: right; justify-content: flex-end; }
+
+    .message-time {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--text-dim);
+    }
+
+    .message-bubble {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+
+    .message.user .message-bubble {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    .message.bot .message-bubble {
+      background: rgba(108, 92, 231, 0.1);
+      border: 1px solid rgba(108, 92, 231, 0.2);
+      color: var(--text-primary);
+    }
+
+    .message.operator .message-bubble {
+      background: rgba(240, 180, 41, 0.1);
+      border: 1px solid rgba(240, 180, 41, 0.2);
+      color: var(--text-primary);
+    }
+
+    .escalation-banner {
+      margin: 12px 0;
+      padding: 10px 16px;
+      background: rgba(229, 62, 62, 0.08);
+      border: 1px solid rgba(229, 62, 62, 0.25);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--status-critical);
+      animation: msg-in 0.25s ease-out;
+    }
+
+    .escalation-banner-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .escalation-banner-text {
+      flex: 1;
+    }
+
+    .escalation-banner-reason {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Input bar */
+    .input-bar {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .input-bar input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-bar input:focus {
+      border-color: var(--accent);
+    }
+
+    .input-bar input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .input-bar input:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-send {
+      padding: 10px 20px;
+      background: var(--accent);
+      color: var(--bg-primary);
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+
+    .btn-send:hover {
+      background: var(--accent-dim);
+    }
+
+    .btn-send:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ================================================================
+       Right Panel — Session Info
+       ================================================================ */
+    .panel-right {
+      width: 260px;
+      min-width: 260px;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .info-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .info-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .info-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .info-value {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .info-value.accent {
+      color: var(--accent);
+    }
+
+    .info-value.warning {
+      color: var(--status-escalated);
+    }
+
+    .info-value.danger {
+      color: var(--status-critical);
+    }
+
+    .info-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--text-dim);
+      font-size: 12px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* Escalation history in right panel */
+    .escalation-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .escalation-item {
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      background: rgba(229, 62, 62, 0.06);
+      border: 1px solid rgba(229, 62, 62, 0.15);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .escalation-item-question {
+      color: var(--text-primary);
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .escalation-item-reason {
+      color: var(--text-dim);
+      font-size: 10px;
+    }
+
+    /* Toast notifications */
+    .toast-container {
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 12px;
+      color: var(--text-primary);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: toast-in 0.3s ease-out;
+      max-width: 320px;
+    }
+
+    .toast.escalation {
+      border-color: rgba(229, 62, 62, 0.4);
+      background: rgba(229, 62, 62, 0.1);
+    }
+
+    .toast.success {
+      border-color: var(--border-accent);
+      background: var(--accent-glow);
+    }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Responsive: hide right panel on narrow screens */
+    @media (max-width: 900px) {
+      .panel-right { display: none; }
+    }
+
+    @media (max-width: 700px) {
+      .panel-left { width: 240px; min-width: 240px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ============================================================
+       Header
+       ============================================================ -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-icon">M</div>
+      <div class="header-title">Maskki <span>Operator Dashboard</span></div>
+    </div>
+    <div class="connection-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost" id="btnRefresh" title="Refresh sessions">Refresh</button>
+    </div>
+  </header>
+
+  <!-- Config bar -->
+  <div class="config-bar">
+    <label for="inputHost">Host</label>
+    <input type="text" id="inputHost" placeholder="localhost:8000" />
+    <label for="inputApiKey">API Key</label>
+    <input type="password" id="inputApiKey" placeholder="Enter API key" />
+    <button class="btn btn-accent" id="btnConnect">Connect</button>
+    <button class="btn btn-ghost" id="btnDisconnect" style="display:none;">Disconnect</button>
+  </div>
+
+  <!-- ============================================================
+       Main three-panel layout
+       ============================================================ -->
+  <div class="main">
+    <!-- Left panel: sessions -->
+    <div class="panel-left">
+      <div class="panel-header">
+        <div class="panel-title">Active Sessions</div>
+        <div class="panel-badge" id="sessionCount">0</div>
+      </div>
+      <div class="session-list" id="sessionList">
+        <div class="session-empty">
+          <div class="session-empty-icon">&#9898;</div>
+          <div>No active sessions<br><span style="font-size:11px;color:var(--text-dim);">Connect to see live sessions</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center panel: conversation -->
+    <div class="panel-center">
+      <div class="conversation-header">
+        <div>
+          <div class="conversation-title" id="convTitle">No Session Selected</div>
+          <div class="conversation-subtitle" id="convSubtitle">Select a session from the left panel to begin monitoring</div>
+        </div>
+        <button class="btn btn-ghost" id="btnUnsubscribe" style="display:none;">Unsubscribe</button>
+      </div>
+      <div class="conversation-body" id="conversationBody">
+        <div class="conversation-empty">
+          <div class="conversation-empty-icon">&#128172;</div>
+          <div>Select a session to view the conversation</div>
+        </div>
+      </div>
+      <div class="input-bar">
+        <input type="text" id="inputMessage" placeholder="Type an operator override message..." disabled />
+        <button class="btn-send" id="btnSend" disabled>Send</button>
+      </div>
+    </div>
+
+    <!-- Right panel: session info -->
+    <div class="panel-right">
+      <div id="infoContent">
+        <div class="info-empty">
+          <div>No session selected</div>
+          <div style="margin-top:6px;font-size:11px;">Session details will appear here</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notifications -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ================================================================
+// Maskki Operator Dashboard — Client Application
+// ================================================================
+
+(function() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────────
+  let ws = null;
+  let operatorId = null;
+  let authenticated = false;
+  let subscribedSessionId = null;
+  let sessions = [];               // raw session data from server/REST
+  let sessionTimers = {};           // session_id -> { startedAt, interval }
+  let messages = [];                // messages for the subscribed session
+  let escalations = {};             // session_id -> [{question, reason, timestamp}]
+  let escalationCounts = {};        // session_id -> count
+  let messageCounts = {};           // session_id -> count (incremented from WS)
+  let heartbeatInterval = null;
+  let restRefreshInterval = null;
+  let audioCtx = null;
+
+  // ── DOM refs ───────────────────────────────────────────────────
+  const $statusDot = document.getElementById('statusDot');
+  const $statusText = document.getElementById('statusText');
+  const $inputHost = document.getElementById('inputHost');
+  const $inputApiKey = document.getElementById('inputApiKey');
+  const $btnConnect = document.getElementById('btnConnect');
+  const $btnDisconnect = document.getElementById('btnDisconnect');
+  const $btnRefresh = document.getElementById('btnRefresh');
+  const $sessionList = document.getElementById('sessionList');
+  const $sessionCount = document.getElementById('sessionCount');
+  const $convTitle = document.getElementById('convTitle');
+  const $convSubtitle = document.getElementById('convSubtitle');
+  const $conversationBody = document.getElementById('conversationBody');
+  const $inputMessage = document.getElementById('inputMessage');
+  const $btnSend = document.getElementById('btnSend');
+  const $btnUnsubscribe = document.getElementById('btnUnsubscribe');
+  const $infoContent = document.getElementById('infoContent');
+  const $toastContainer = document.getElementById('toastContainer');
+
+  // ── Initialization ─────────────────────────────────────────────
+  function init() {
+    // Restore saved config
+    const savedHost = localStorage.getItem('maskki_op_host') || '';
+    const savedKey = localStorage.getItem('maskki_op_api_key') || '';
+    $inputHost.value = savedHost;
+    $inputApiKey.value = savedKey;
+
+    // Event listeners
+    $btnConnect.addEventListener('click', connect);
+    $btnDisconnect.addEventListener('click', disconnect);
+    $btnRefresh.addEventListener('click', refreshSessionsRest);
+    $btnSend.addEventListener('click', sendMessage);
+    $btnUnsubscribe.addEventListener('click', unsubscribe);
+    $inputMessage.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+
+  // ── WebSocket connection ───────────────────────────────────────
+  function connect() {
+    if (ws && ws.readyState <= WebSocket.OPEN) {
+      disconnect();
+    }
+
+    const host = $inputHost.value.trim();
+    const apiKey = $inputApiKey.value.trim();
+
+    if (!host) {
+      showToast('Please enter a host address.', 'error');
+      return;
+    }
+
+    // Save config
+    localStorage.setItem('maskki_op_host', host);
+    localStorage.setItem('maskki_op_api_key', apiKey);
+
+    setConnectionState('connecting');
+
+    const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'ws' : 'wss';
+    const url = protocol + '://' + host + '/ws/operator';
+
+    try {
+      ws = new WebSocket(url);
+    } catch (e) {
+      setConnectionState('disconnected');
+      showToast('Failed to create WebSocket: ' + e.message, 'error');
+      return;
+    }
+
+    ws.onopen = function() {
+      setConnectionState('connecting');
+      // Server sends auth_required, then we send auth
+    };
+
+    ws.onclose = function(e) {
+      setConnectionState('disconnected');
+      stopHeartbeat();
+      stopRestRefresh();
+      authenticated = false;
+      operatorId = null;
+    };
+
+    ws.onerror = function() {
+      setConnectionState('disconnected');
+      showToast('WebSocket connection error.', 'error');
+    };
+
+    ws.onmessage = function(event) {
+      handleServerMessage(event.data);
+    };
+  }
+
+  function disconnect() {
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+    setConnectionState('disconnected');
+    stopHeartbeat();
+    stopRestRefresh();
+    authenticated = false;
+    operatorId = null;
+    subscribedSessionId = null;
+    messages = [];
+    renderConversation();
+    renderSessionInfo();
+  }
+
+  function sendWS(data) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(data));
+    }
+  }
+
+  // ── Message handling ───────────────────────────────────────────
+  function handleServerMessage(raw) {
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
+
+    const type = data.type || '';
+
+    switch (type) {
+      case 'auth_required':
+        // Send auth
+        sendWS({ type: 'auth', api_key: $inputApiKey.value.trim() });
+        break;
+
+      case 'authenticated':
+        authenticated = true;
+        operatorId = data.operator_id || '';
+        setConnectionState('connected');
+        startHeartbeat();
+        startRestRefresh();
+        showToast('Authenticated as ' + operatorId, 'success');
+        // Server will also send session_list
+        break;
+
+      case 'session_list':
+        handleSessionList(data);
+        break;
+
+      case 'subscribed':
+        subscribedSessionId = data.session_id || '';
+        messages = [];
+        escalations[subscribedSessionId] = escalations[subscribedSessionId] || [];
+        renderConversation();
+        updateConversationHeader();
+        renderSessionInfo();
+        enableInput(true);
+        $btnUnsubscribe.style.display = 'inline-block';
+        break;
+
+      case 'unsubscribed':
+        subscribedSessionId = null;
+        messages = [];
+        renderConversation();
+        updateConversationHeader();
+        renderSessionInfo();
+        enableInput(false);
+        $btnUnsubscribe.style.display = 'none';
+        break;
+
+      case 'customer_message':
+        handleCustomerMessage(data);
+        break;
+
+      case 'escalation_alert':
+        handleEscalation(data);
+        break;
+
+      case 'message_sent':
+        // Our operator message was delivered
+        messages.push({
+          role: 'operator',
+          text: data.text || '',
+          timestamp: Date.now() / 1000
+        });
+        renderConversation();
+        scrollToBottom();
+        break;
+
+      case 'session_ended':
+        if (data.session_id === subscribedSessionId) {
+          showToast('Session ' + data.session_id.slice(0, 8) + '... ended.', 'info');
+          subscribedSessionId = null;
+          messages = [];
+          renderConversation();
+          updateConversationHeader();
+          renderSessionInfo();
+          enableInput(false);
+          $btnUnsubscribe.style.display = 'none';
+        }
+        refreshSessionsRest();
+        break;
+
+      case 'error':
+        showToast('Error: ' + (data.error || 'Unknown') + (data.detail ? ' — ' + data.detail : ''), 'error');
+        break;
+
+      case 'pong':
+        // heartbeat acknowledged
+        break;
+
+      case 'feedback_recorded':
+      case 'learn_recorded':
+        showToast('Feedback recorded.', 'success');
+        break;
+
+      default:
+        // Ignore unknown types (video frames, audio chunks, etc.)
+        break;
+    }
+  }
+
+  function handleSessionList(data) {
+    const raw = data.sessions || [];
+    sessions = raw.map(function(s) {
+      return {
+        session_id: s.session_id || '',
+        client_ip: s.client_ip || '',
+        avatar_id: s.avatar_id || '',
+        language: s.language || '',
+        connected_at: s.connected_at || s.started_at || 0,
+        is_recording: s.is_recording || false,
+        operator_id: s.operator_id || null,
+        message_count: s.message_count || 0,
+      };
+    });
+    $sessionCount.textContent = sessions.length;
+    renderSessionList();
+  }
+
+  function handleCustomerMessage(data) {
+    const sessionId = data.session_id || '';
+    // Increment message count for this session
+    messageCounts[sessionId] = (messageCounts[sessionId] || 0) + 1;
+
+    if (sessionId === subscribedSessionId) {
+      messages.push({
+        role: data.role || 'user',
+        text: data.text || '',
+        timestamp: data.timestamp || (Date.now() / 1000)
+      });
+      renderConversation();
+      scrollToBottom();
+      renderSessionInfo();
+    }
+  }
+
+  function handleEscalation(data) {
+    const sessionId = data.session_id || '';
+
+    // Track escalation
+    if (!escalations[sessionId]) escalations[sessionId] = [];
+    escalations[sessionId].push({
+      question: data.question || '',
+      reason: data.reason || '',
+      confidence: data.confidence || 0,
+      timestamp: data.timestamp || (Date.now() / 1000),
+      escalation_id: data.escalation_id || ''
+    });
+    escalationCounts[sessionId] = (escalationCounts[sessionId] || 0) + 1;
+
+    // Play alert sound
+    playEscalationBeep();
+
+    // Show toast
+    showToast(
+      'Escalation: "' + (data.question || '').slice(0, 60) + (data.question && data.question.length > 60 ? '...' : '') + '"',
+      'escalation'
+    );
+
+    // If we're watching this session, add a banner to conversation
+    if (sessionId === subscribedSessionId) {
+      messages.push({
+        role: '_escalation',
+        question: data.question || '',
+        reason: data.reason || '',
+        confidence: data.confidence || 0,
+        timestamp: data.timestamp || (Date.now() / 1000)
+      });
+      renderConversation();
+      scrollToBottom();
+      renderSessionInfo();
+    }
+
+    // Update session list to show escalation status
+    renderSessionList();
+  }
+
+  // ── Session list rendering ─────────────────────────────────────
+  function renderSessionList() {
+    if (sessions.length === 0) {
+      $sessionList.innerHTML = '<div class="session-empty">' +
+        '<div class="session-empty-icon">&#9898;</div>' +
+        '<div>No active sessions</div></div>';
+      return;
+    }
+
+    let html = '';
+    sessions.forEach(function(s) {
+      const sid = s.session_id;
+      const isActive = sid === subscribedSessionId;
+      const escCount = escalationCounts[sid] || 0;
+      const statusClass = escCount >= 3 ? 'critical' : (escCount >= 1 ? 'escalated' : 'normal');
+      const cardClass = 'session-card' +
+        (isActive ? ' active' : '') +
+        (escCount >= 3 ? ' critical' : (escCount >= 1 ? ' escalated' : ''));
+
+      const duration = s.connected_at ? formatDuration(Date.now() / 1000 - s.connected_at) : '--:--';
+      const msgCount = messageCounts[sid] || s.message_count || 0;
+      const displayName = s.client_ip || sid.slice(0, 12);
+      const avatarName = s.avatar_id || 'Default';
+
+      html += '<div class="' + cardClass + '" data-sid="' + escapeHtml(sid) + '">' +
+        '<div class="session-card-top">' +
+          '<div class="session-name" title="' + escapeHtml(sid) + '">' + escapeHtml(displayName) + '</div>' +
+          '<div class="session-status-dot ' + statusClass + '"></div>' +
+        '</div>' +
+        '<div class="session-meta">' +
+          '<div class="session-meta-item"><span>&#9201;</span> <span class="session-timer" data-started="' + s.connected_at + '">' + duration + '</span></div>' +
+          '<div class="session-meta-item"><span>&#128172;</span> ' + msgCount + '</div>' +
+          (escCount > 0 ? '<div class="session-meta-item" style="color:var(--status-escalated)"><span>&#9888;</span> ' + escCount + '</div>' : '') +
+        '</div>' +
+        '<div class="session-avatar-name">Avatar: ' + escapeHtml(avatarName) + '</div>' +
+      '</div>';
+    });
+
+    $sessionList.innerHTML = html;
+
+    // Attach click handlers
+    $sessionList.querySelectorAll('.session-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        const sid = this.getAttribute('data-sid');
+        subscribeToSession(sid);
+      });
+    });
+  }
+
+  // Update session timers every second
+  setInterval(function() {
+    document.querySelectorAll('.session-timer').forEach(function(el) {
+      const started = parseFloat(el.getAttribute('data-started'));
+      if (started) {
+        el.textContent = formatDuration(Date.now() / 1000 - started);
+      }
+    });
+    // Also update right panel timer if session is selected
+    const $durationVal = document.getElementById('infoDuration');
+    if ($durationVal && subscribedSessionId) {
+      const sess = sessions.find(function(s) { return s.session_id === subscribedSessionId; });
+      if (sess && sess.connected_at) {
+        $durationVal.textContent = formatDuration(Date.now() / 1000 - sess.connected_at);
+      }
+    }
+  }, 1000);
+
+  // ── Subscribe / Unsubscribe ────────────────────────────────────
+  function subscribeToSession(sessionId) {
+    if (subscribedSessionId === sessionId) return;
+    sendWS({ type: 'subscribe', session_id: sessionId });
+  }
+
+  function unsubscribe() {
+    sendWS({ type: 'unsubscribe' });
+  }
+
+  // ── Send operator message ──────────────────────────────────────
+  function sendMessage() {
+    const text = $inputMessage.value.trim();
+    if (!text || !subscribedSessionId) return;
+
+    sendWS({
+      type: 'operator_message',
+      text: text
+    });
+
+    $inputMessage.value = '';
+  }
+
+  // ── Conversation rendering ─────────────────────────────────────
+  function renderConversation() {
+    if (!subscribedSessionId || messages.length === 0) {
+      $conversationBody.innerHTML = '<div class="conversation-empty">' +
+        '<div class="conversation-empty-icon">&#128172;</div>' +
+        '<div>' + (subscribedSessionId ? 'Listening for messages...' : 'Select a session to view the conversation') + '</div></div>';
+      return;
+    }
+
+    let html = '';
+    messages.forEach(function(msg) {
+      if (msg.role === '_escalation') {
+        html += '<div class="escalation-banner">' +
+          '<div class="escalation-banner-icon">&#9888;</div>' +
+          '<div class="escalation-banner-text">' +
+            '<div><strong>Escalation:</strong> ' + escapeHtml(msg.question) + '</div>' +
+            '<div class="escalation-banner-reason">Reason: ' + escapeHtml(msg.reason) +
+              (msg.confidence ? ' (confidence: ' + (msg.confidence * 100).toFixed(0) + '%)' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+        return;
+      }
+
+      const roleClass = msg.role === 'user' ? 'user' : (msg.role === 'operator' ? 'operator' : 'bot');
+      const roleLabel = msg.role === 'user' ? 'Customer' : (msg.role === 'operator' ? 'Operator' : 'AI');
+      const ts = msg.timestamp ? formatTime(msg.timestamp) : '';
+
+      html += '<div class="message ' + roleClass + '">' +
+        '<div class="message-label">' + roleLabel + ' <span class="message-time">' + ts + '</span></div>' +
+        '<div class="message-bubble">' + escapeHtml(msg.text) + '</div>' +
+      '</div>';
+    });
+
+    $conversationBody.innerHTML = html;
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(function() {
+      $conversationBody.scrollTop = $conversationBody.scrollHeight;
+    });
+  }
+
+  function updateConversationHeader() {
+    if (!subscribedSessionId) {
+      $convTitle.textContent = 'No Session Selected';
+      $convSubtitle.textContent = 'Select a session from the left panel to begin monitoring';
+      return;
+    }
+
+    const sess = sessions.find(function(s) { return s.session_id === subscribedSessionId; });
+    $convTitle.textContent = 'Session: ' + subscribedSessionId.slice(0, 16) + '...';
+    $convSubtitle.textContent = sess
+      ? 'Avatar: ' + (sess.avatar_id || 'Default') + '  |  IP: ' + (sess.client_ip || 'N/A')
+      : '';
+  }
+
+  // ── Right panel: session info ──────────────────────────────────
+  function renderSessionInfo() {
+    if (!subscribedSessionId) {
+      $infoContent.innerHTML = '<div class="info-empty">' +
+        '<div>No session selected</div>' +
+        '<div style="margin-top:6px;font-size:11px;">Session details will appear here</div>' +
+      '</div>';
+      return;
+    }
+
+    const sess = sessions.find(function(s) { return s.session_id === subscribedSessionId; });
+    const escCount = escalationCounts[subscribedSessionId] || 0;
+    const msgCount = messages.filter(function(m) { return m.role !== '_escalation'; }).length;
+    const duration = sess && sess.connected_at ? formatDuration(Date.now() / 1000 - sess.connected_at) : '--:--';
+    const escList = escalations[subscribedSessionId] || [];
+
+    let html = '';
+
+    // Session details
+    html += '<div class="info-section">' +
+      '<div class="info-section-title">Session Details</div>' +
+      '<div class="info-row"><span class="info-label">Session ID</span><span class="info-value" title="' + escapeHtml(subscribedSessionId) + '">' + subscribedSessionId.slice(0, 12) + '...</span></div>' +
+      '<div class="info-row"><span class="info-label">Duration</span><span class="info-value accent" id="infoDuration">' + duration + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Messages</span><span class="info-value">' + msgCount + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Escalations</span><span class="info-value' + (escCount > 0 ? ' danger' : '') + '">' + escCount + '</span></div>' +
+    '</div>';
+
+    // Customer info
+    if (sess) {
+      html += '<div class="info-section">' +
+        '<div class="info-section-title">Customer</div>' +
+        '<div class="info-row"><span class="info-label">IP Address</span><span class="info-value">' + escapeHtml(sess.client_ip || 'N/A') + '</span></div>' +
+        '<div class="info-row"><span class="info-label">Language</span><span class="info-value">' + escapeHtml(sess.language || 'N/A') + '</span></div>' +
+        '<div class="info-row"><span class="info-label">Recording</span><span class="info-value">' + (sess.is_recording ? 'Yes' : 'No') + '</span></div>' +
+      '</div>';
+
+      html += '<div class="info-section">' +
+        '<div class="info-section-title">Avatar</div>' +
+        '<div class="info-row"><span class="info-label">Avatar ID</span><span class="info-value accent">' + escapeHtml(sess.avatar_id || 'Default') + '</span></div>' +
+        (sess.operator_id ? '<div class="info-row"><span class="info-label">Operator</span><span class="info-value">' + escapeHtml(sess.operator_id) + '</span></div>' : '') +
+      '</div>';
+    }
+
+    // Escalation history
+    if (escList.length > 0) {
+      html += '<div class="info-section">' +
+        '<div class="info-section-title">Escalation History</div>' +
+        '<div class="escalation-list">';
+
+      escList.forEach(function(esc) {
+        html += '<div class="escalation-item">' +
+          '<div class="escalation-item-question">' + escapeHtml(esc.question.slice(0, 80)) + (esc.question.length > 80 ? '...' : '') + '</div>' +
+          '<div class="escalation-item-reason">' + escapeHtml(esc.reason) + ' &middot; ' + formatTime(esc.timestamp) + '</div>' +
+        '</div>';
+      });
+
+      html += '</div></div>';
+    }
+
+    $infoContent.innerHTML = html;
+  }
+
+  // ── REST integration ───────────────────────────────────────────
+  function refreshSessionsRest() {
+    const host = $inputHost.value.trim();
+    const apiKey = $inputApiKey.value.trim();
+    if (!host || !authenticated) return;
+
+    const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https';
+    const url = protocol + '://' + host + '/api/v1/supervisor/sessions/active';
+
+    fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'X-API-Key': apiKey,
+        'Accept': 'application/json'
+      }
+    })
+    .then(function(resp) {
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return resp.json();
+    })
+    .then(function(data) {
+      handleSessionList(data);
+    })
+    .catch(function(err) {
+      // Silently fail REST — WS session_list is the primary source
+      console.warn('REST refresh failed:', err.message);
+    });
+  }
+
+  function startRestRefresh() {
+    stopRestRefresh();
+    refreshSessionsRest();
+    restRefreshInterval = setInterval(refreshSessionsRest, 10000);
+  }
+
+  function stopRestRefresh() {
+    if (restRefreshInterval) {
+      clearInterval(restRefreshInterval);
+      restRefreshInterval = null;
+    }
+  }
+
+  // ── Heartbeat ──────────────────────────────────────────────────
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatInterval = setInterval(function() {
+      sendWS({ type: 'ping' });
+    }, 30000);
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  }
+
+  // ── Connection state UI ────────────────────────────────────────
+  function setConnectionState(state) {
+    $statusDot.className = 'status-dot';
+    $btnConnect.style.display = 'inline-block';
+    $btnDisconnect.style.display = 'none';
+
+    switch (state) {
+      case 'connected':
+        $statusDot.classList.add('connected');
+        $statusText.textContent = 'Connected';
+        $btnConnect.style.display = 'none';
+        $btnDisconnect.style.display = 'inline-block';
+        break;
+      case 'connecting':
+        $statusDot.classList.add('connecting');
+        $statusText.textContent = 'Connecting...';
+        break;
+      case 'disconnected':
+      default:
+        $statusText.textContent = 'Disconnected';
+        break;
+    }
+  }
+
+  function enableInput(enabled) {
+    $inputMessage.disabled = !enabled;
+    $btnSend.disabled = !enabled;
+    if (enabled) {
+      $inputMessage.focus();
+    }
+  }
+
+  // ── Audio alert (Web Audio API beep) ───────────────────────────
+  function playEscalationBeep() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      // Two-tone alert: high then low
+      var now = audioCtx.currentTime;
+
+      // First tone
+      var osc1 = audioCtx.createOscillator();
+      var gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.value = 880;
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.15);
+
+      // Second tone
+      var osc2 = audioCtx.createOscillator();
+      var gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = 660;
+      gain2.gain.setValueAtTime(0.3, now + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now + 0.18);
+      osc2.stop(now + 0.35);
+
+      // Third tone (urgency)
+      var osc3 = audioCtx.createOscillator();
+      var gain3 = audioCtx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.value = 880;
+      gain3.gain.setValueAtTime(0.25, now + 0.4);
+      gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+      osc3.connect(gain3);
+      gain3.connect(audioCtx.destination);
+      osc3.start(now + 0.4);
+      osc3.stop(now + 0.6);
+    } catch (e) {
+      // Audio not available — silently ignore
+    }
+  }
+
+  // ── Toast notifications ────────────────────────────────────────
+  function showToast(text, type) {
+    type = type || 'info';
+    var toast = document.createElement('div');
+    toast.className = 'toast' + (type === 'escalation' ? ' escalation' : '') + (type === 'success' ? ' success' : '');
+    toast.textContent = text;
+    $toastContainer.appendChild(toast);
+
+    setTimeout(function() {
+      toast.style.transition = 'opacity 0.3s';
+      toast.style.opacity = '0';
+      setTimeout(function() {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    }, 4000);
+  }
+
+  // ── Utility functions ──────────────────────────────────────────
+  function formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '00:00';
+    seconds = Math.floor(seconds);
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    var s = seconds % 60;
+    if (h > 0) {
+      return pad(h) + ':' + pad(m) + ':' + pad(s);
+    }
+    return pad(m) + ':' + pad(s);
+  }
+
+  function pad(n) {
+    return n < 10 ? '0' + n : '' + n;
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts * 1000);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────
+  init();
+})();
+</script>
+
+</body>
+</html>

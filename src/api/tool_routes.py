@@ -108,6 +108,15 @@ async def create_tool(body: ToolCreateRequest, request: Request):
     db = _get_db(request)
     customer_id = _get_customer_id(request)
 
+    # SSRF protection: validate API URL before saving
+    if body.api_url:
+        from src.agent.security import validate_tool_url
+        if not validate_tool_url(body.api_url):
+            raise HTTPException(
+                status_code=400,
+                detail="URL not allowed: points to internal/private network",
+            )
+
     async with db.session() as session:
         # Check uniqueness of tool_id
         existing = await session.execute(

@@ -318,3 +318,44 @@ async def get_learning_stats(request: Request):
         auto_approved_count=auto_approved_count,
         avg_confidence=round(avg_confidence, 4),
     )
+
+
+# -- Cross-Learning: Industries -------------------------------------------
+
+
+@router.get("/industries")
+async def list_industries(request: Request):
+    """List all available industry categories."""
+    from src.agent.cross_learning import CrossLearningEngine
+
+    db = _get_db(request)
+    engine = CrossLearningEngine(db)
+    industries = await engine.list_industries()
+    return {"industries": industries}
+
+
+@router.post("/employees/{employee_id}/industries/adopt")
+async def adopt_industry(
+    employee_id: str,
+    request: Request,
+    industry_slug: str = Query(..., description="Industry slug to adopt"),
+):
+    """Adopt industry knowledge templates for an employee."""
+    from src.agent.cross_learning import CrossLearningEngine
+
+    db = _get_db(request)
+    engine = CrossLearningEngine(db)
+    result = await engine.adopt_industry(employee_id, industry_slug)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/admin/cross-learning/stats")
+async def cross_learning_stats(request: Request):
+    """Return cross-learning statistics (admin endpoint)."""
+    from src.agent.cross_learning import CrossLearningEngine
+
+    db = _get_db(request)
+    engine = CrossLearningEngine(db)
+    return await engine.get_stats()

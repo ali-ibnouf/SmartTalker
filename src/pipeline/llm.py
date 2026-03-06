@@ -216,6 +216,16 @@ class LLMEngine:
         self._cb_failures = 0
         self._cb_last_failure = 0.0
 
+        # Rolling latency buffer for monitoring (last 50 calls)
+        from collections import deque
+        self._recent_latencies: deque[float] = deque(maxlen=50)
+
+        # Consecutive timeout/error tracking (for agent escalation)
+        self._consecutive_timeouts: int = 0
+        self._rate_limit_429_count: int = 0
+        self._pending_requests: int = 0
+        self.text_only_mode: bool = False  # Set by agent auto-fix after 5+ consecutive timeouts
+
         logger.info(
             "LLMEngine initialized (DashScope API)",
             extra={"model": self._model, "base_url": self._base_url},
@@ -367,99 +377,158 @@ class LLMEngine:
             raise LLMError(message="User text cannot be empty")
 
         self._check_circuit_breaker()
-
-        session = await self._get_session(session_id)
-        messages = self._build_messages(
-            user_text, emotion, language,
-            conversation_history=conversation_history,
-            session_history=session.history,
-            kb_context=kb_context,
-        )
-        start = time.perf_counter()
+        self._pending_requests += 1
 
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/chat/completions",
-                json={
-                    "model": self._model,
-                    "messages": messages,
-                    "temperature": self._temperature,
-                    "max_tokens": self._max_tokens,
+            session = await self._get_session(session_id)
+            messages = self._build_messages(
+                user_text, emotion, language,
+                conversation_history=conversation_history,
+                session_history=session.history,
+                kb_context=kb_context,
+            )
+            start = time.perf_counter()
+
+            # Retry with exponential backoff for transient errors (1s, 2s, 4s)
+            _backoff = [1.0, 2.0, 4.0]
+            _max_attempts = len(_backoff) + 1  # 4 total
+            data: Optional[dict] = None
+
+            for attempt in range(_max_attempts):
+                try:
+                    client = await self._get_client()
+                    response = await client.post(
+                        "/chat/completions",
+                        json={
+                            "model": self._model,
+                            "messages": messages,
+                            "temperature": self._temperature,
+                            "max_tokens": self._max_tokens,
+                        },
+                    )
+
+                    # Handle 429 rate limit with Retry-After or backoff
+                    if response.status_code == 429:
+                        self._rate_limit_429_count += 1
+                        if attempt < _max_attempts - 1:
+                            retry_after = float(
+                                response.headers.get("Retry-After", _backoff[attempt])
+                            )
+                            logger.warning(
+                                "DashScope rate limited (429), retrying",
+                                extra={"attempt": attempt + 1, "retry_after": retry_after},
+                            )
+                            await asyncio.sleep(retry_after)
+                            continue
+                        # Exhausted retries on 429
+                        response.raise_for_status()
+
+                    response.raise_for_status()
+                    data = response.json()
+                    break  # Success
+
+                except httpx.TimeoutException as exc:
+                    if attempt < _max_attempts - 1:
+                        delay = _backoff[attempt]
+                        logger.warning(
+                            "DashScope timeout, retrying with backoff",
+                            extra={"attempt": attempt + 1, "delay": delay, "session_id": session_id},
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    self._record_failure()
+                    self._consecutive_timeouts += 1
+                    raise LLMError(
+                        message=f"LLM request timed out after {_max_attempts} attempts",
+                        original_exception=exc,
+                    ) from exc
+
+                except httpx.ConnectError as exc:
+                    if attempt < _max_attempts - 1:
+                        delay = _backoff[attempt]
+                        logger.warning(
+                            "DashScope connection error, retrying with backoff",
+                            extra={"attempt": attempt + 1, "delay": delay, "session_id": session_id},
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    self._record_failure()
+                    self._consecutive_timeouts += 1
+                    raise LLMError(
+                        message="Cannot connect to LLM API after retries",
+                        detail=f"Check that LLM API is reachable at: {self._base_url}",
+                        original_exception=exc,
+                    ) from exc
+
+                except httpx.HTTPStatusError as exc:
+                    # Non-429 HTTP errors — don't retry
+                    self._record_failure()
+                    raise LLMError(
+                        message=f"LLM API error: {exc.response.status_code}",
+                        detail=exc.response.text,
+                        original_exception=exc,
+                    ) from exc
+
+                except Exception as exc:
+                    self._record_failure()
+                    raise LLMError(
+                        message="LLM generation failed",
+                        detail=str(exc),
+                        original_exception=exc,
+                    ) from exc
+
+            if data is None:
+                self._record_failure()
+                self._consecutive_timeouts += 1
+                raise LLMError(message="LLM request failed after all retry attempts")
+
+            # Success — reset counters
+            self._record_success()
+            self._consecutive_timeouts = 0
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            self._recent_latencies.append(elapsed_ms / 1000.0)
+
+            # Parse OpenAI-compatible response
+            response_text = self._extract_text(data)
+            tokens_used = self._extract_tokens(data)
+
+            # Calculate cost (qwen3-max pricing)
+            usage = data.get("usage", {})
+            input_tokens = usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("completion_tokens", 0)
+            cost_usd = (input_tokens / 1_000_000 * self.INPUT_COST_PER_M) + (
+                output_tokens / 1_000_000 * self.OUTPUT_COST_PER_M
+            )
+
+            # Update session history (under lock to prevent interleaving)
+            async with self._session_lock:
+                session.history.append({"role": "user", "content": user_text})
+                session.history.append({"role": "assistant", "content": response_text})
+
+            result = LLMResult(
+                text=response_text,
+                emotion=emotion,
+                latency_ms=elapsed_ms,
+                tokens_used=tokens_used,
+                cost_usd=cost_usd,
+            )
+
+            log_with_latency(
+                logger,
+                "LLM generation complete",
+                elapsed_ms,
+                extra={
+                    "input_length": len(user_text),
+                    "output_length": len(response_text),
+                    "tokens": tokens_used,
+                    "cost_usd": f"{cost_usd:.6f}",
+                    "session_id": session_id,
                 },
             )
-            response.raise_for_status()
-            data = response.json()
+            return result
 
-        except httpx.ConnectError as exc:
-            self._record_failure()
-            raise LLMError(
-                message="Cannot connect to LLM API",
-                detail=f"Check that LLM API is reachable at: {self._base_url}",
-                original_exception=exc,
-            ) from exc
-        except httpx.TimeoutException as exc:
-            self._record_failure()
-            raise LLMError(
-                message=f"LLM request timed out after {self._timeout}s",
-                original_exception=exc,
-            ) from exc
-        except httpx.HTTPStatusError as exc:
-            self._record_failure()
-            raise LLMError(
-                message=f"LLM API error: {exc.response.status_code}",
-                detail=exc.response.text,
-                original_exception=exc,
-            ) from exc
-        except Exception as exc:
-            self._record_failure()
-            raise LLMError(
-                message="LLM generation failed",
-                detail=str(exc),
-                original_exception=exc,
-            ) from exc
-
-        self._record_success()
-        elapsed_ms = int((time.perf_counter() - start) * 1000)
-
-        # Parse OpenAI-compatible response
-        response_text = self._extract_text(data)
-        tokens_used = self._extract_tokens(data)
-
-        # Calculate cost (qwen3-max pricing)
-        usage = data.get("usage", {})
-        input_tokens = usage.get("prompt_tokens", 0)
-        output_tokens = usage.get("completion_tokens", 0)
-        cost_usd = (input_tokens / 1_000_000 * self.INPUT_COST_PER_M) + (
-            output_tokens / 1_000_000 * self.OUTPUT_COST_PER_M
-        )
-
-        # Update session history (under lock to prevent interleaving)
-        async with self._session_lock:
-            session.history.append({"role": "user", "content": user_text})
-            session.history.append({"role": "assistant", "content": response_text})
-
-        result = LLMResult(
-            text=response_text,
-            emotion=emotion,
-            latency_ms=elapsed_ms,
-            tokens_used=tokens_used,
-            cost_usd=cost_usd,
-        )
-
-        log_with_latency(
-            logger,
-            "LLM generation complete",
-            elapsed_ms,
-            extra={
-                "input_length": len(user_text),
-                "output_length": len(response_text),
-                "tokens": tokens_used,
-                "cost_usd": f"{cost_usd:.6f}",
-                "session_id": session_id,
-            },
-        )
-        return result
+        finally:
+            self._pending_requests -= 1
 
     # ── Response parsing (OpenAI-compatible format) ───────────────────────
 

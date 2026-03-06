@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartTalker — Operator Dashboard</title>
+    <meta name="description" content="Operator monitoring dashboard for SmartTalker Avatar sessions">
+    <link rel="stylesheet" href="operator.css">
+</head>
+
+<body>
+    <!-- ── Header ─────────────────────────────────────────────────── -->
+    <header id="header">
+        <div class="header-left">
+            <h1>SmartTalker</h1>
+            <span class="subtitle">Operator Dashboard</span>
+        </div>
+        <nav class="nav-links" style="display: flex; gap: 15px;">
+            <a href="index.html" style="color: #8b949e; text-decoration: none;">Chat</a>
+            <a href="operator.html" class="active" style="color: #fff; text-decoration: none;">Operator</a>
+            <a href="dashboard.html" style="color: #8b949e; text-decoration: none;">Dashboard</a>
+        </nav>
+        <div class="header-right">
+            <span id="op-status-dot" class="dot disconnected"></span>
+            <span id="op-status-text">Disconnected</span>
+        </div>
+    </header>
+
+    <!-- ── Main Layout ────────────────────────────────────────────── -->
+    <main id="main">
+        <!-- Left: Session List -->
+        <aside id="session-sidebar">
+            <div class="sidebar-header">
+                <h2>Active Sessions</h2>
+                <button id="refresh-sessions-btn" title="Refresh">⟳</button>
+            </div>
+            <div id="session-list">
+                <div class="empty-state">No active sessions</div>
+            </div>
+        </aside>
+
+        <!-- Center: Customer Video Feed -->
+        <section id="video-section">
+            <div id="video-header">
+                <span id="watching-label">Not monitoring any session</span>
+                <div id="video-controls">
+                    <button id="unsubscribe-btn" disabled title="Stop Monitoring">✕ Leave</button>
+                </div>
+            </div>
+            <div id="customer-video-container">
+                <img id="customer-video-frame" alt="Customer camera feed">
+                <div id="customer-video-placeholder">
+                    <div class="placeholder-icon">📹</div>
+                    <p>Select a session to start monitoring</p>
+                </div>
+            </div>
+            <!-- Document Viewer -->
+            <div id="document-viewer" style="display:none;">
+                <h3>📄 Scanned Documents</h3>
+                <div id="document-list"></div>
+            </div>
+        </section>
+
+        <!-- Right: Chat Mirror + Controls -->
+        <section id="chat-section">
+            <div class="section-title">
+                <h2>Conversation</h2>
+                <span id="session-info"></span>
+            </div>
+            <div id="op-chat-messages">
+                <div class="empty-state">Conversation will appear here</div>
+            </div>
+
+            <!-- Operator Message Input -->
+            <div id="op-input-bar">
+                <input type="text" id="op-message-input" placeholder="Type operator override response..."
+                    autocomplete="off" maxlength="2000" disabled />
+                <button id="op-send-btn" disabled>Override</button>
+            </div>
+
+            <!-- Training Feedback -->
+            <div id="training-panel">
+                <h3>🧠 Training Feedback</h3>
+                <p class="training-hint">Rate the last AI response to train the Avatar</p>
+                <div id="feedback-buttons">
+                    <button id="feedback-good" class="fb-btn fb-good" disabled>👍 Good</button>
+                    <button id="feedback-bad" class="fb-btn fb-bad" disabled>👎 Bad</button>
+                </div>
+                <input type="text" id="feedback-note" placeholder="Optional note..." maxlength="500" disabled />
+            </div>
+        </section>
+    </main>
+
+    <!-- ── Footer ─────────────────────────────────────────────────── -->
+    <footer id="footer">
+        <span>SmartTalker Operator v1.0</span>
+        <span id="op-id-display">Operator: --</span>
+    </footer>
+
+    <script src="operator.js"></script>
+</body>
+
+</html>

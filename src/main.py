@@ -158,6 +158,17 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning(f"LearningAnalytics failed to load: {exc}")
     application.state.learning_analytics = learning_analytics
 
+    # Seed industry categories for cross-learning
+    if db:
+        try:
+            from src.agent.cross_learning import CrossLearningEngine
+            cross_learning = CrossLearningEngine(db)
+            seeded = await cross_learning.seed_industries()
+            if seeded:
+                logger.info(f"Seeded {seeded} industry categories")
+        except Exception as exc:
+            logger.warning(f"Industry seeding failed: {exc}")
+
     # Initialize Supervisor
     supervisor = SupervisorEngine(config, db=db)
     try:
@@ -177,16 +188,18 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning(f"AnalyticsEngine failed to load: {exc}")
     application.state.analytics = analytics_engine
 
-    # Map Guardrails
+    # Map Guardrails (pipeline's or standalone fallback)
     if pipeline._guardrails is not None:
         try:
             await pipeline._guardrails.load()
-            logger.info("GuardrailsEngine loaded")
+            logger.info("GuardrailsEngine loaded (pipeline)")
         except Exception as exc:
             logger.warning(f"GuardrailsEngine failed to load: {exc}")
         application.state.guardrails = pipeline._guardrails
     else:
-        application.state.guardrails = None
+        from src.agent.guardrails import GuardrailsEngine as StandaloneGuardrails
+        application.state.guardrails = StandaloneGuardrails()
+        logger.info("GuardrailsEngine loaded (standalone)")
 
     # Initialize Billing engine
     billing = BillingEngine(config, db=db)

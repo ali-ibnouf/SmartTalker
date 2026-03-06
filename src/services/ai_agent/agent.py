@@ -14,16 +14,59 @@ from typing import Any, Optional
 
 from src.services.ai_agent.config import AgentSettings
 from src.services.ai_agent.fixes.handlers import (
-    CacheClearFix,
+    DBConnectionFix,
     FixRegistry,
+    MemoryCleanupFix,
+    QuotaGraceFix,
     QuotaWarningFix,
+    RateLimitThrottleFix,
+    RedisMemoryFix,
+    StaleSessionFix,
+    TextOnlyModeFix,
+    VideoDisableFix,
+    WarmupJobFix,
 )
 from src.services.ai_agent.monitors.business import (
     ChurnRiskRule,
     EscalationSpikeRule,
+    FailedPaymentRule,
+    OnboardingStuckRule,
     QuotaExhaustionRule,
+    TrainingStallRule,
+)
+from src.services.ai_agent.monitors.infrastructure import (
+    ASRConnectionRule,
+    ASRLatencyRule,
+    DashScopeConsecutiveTimeoutRule,
+    DashScopeLatencyRule,
+    DashScopeQueueDepthRule,
+    DashScopeQuotaRule,
+    MarginSqueezeRule,
+    PostgreSQLConnectionsRule,
+    R2ConnectivityRule,
+    R2DowntimeRule,
+    RedisMemoryRule as InfraRedisMemoryRule,
+    RunPodColdStartRule,
+    RunPodConsecutiveFailureRule,
+    RunPodHealthRule,
+    RunPodQueueDepthRule,
+    RunPodR2LatencyRule,
+    RunPodRenderTimeRule,
+    RunPodTaskTimeRule,
+    RunPodTimeoutRule,
+    RunPodWorkersRule,
+    TTSConnectionRule,
+    TTSLatencyRule,
+)
+from src.services.ai_agent.monitors.predictions import (
+    CustomerMarginPredictionRule,
+    DashScopeQuotaExhaustionRule,
+    RunPodCostProjectionRule,
+    VRMVideoRatioRule,
 )
 from src.services.ai_agent.monitors.security import (
+    APIUsageSpikeRule,
+    FailedAuthRule,
     PolicyViolationSpikeRule,
     SuspiciousActivityRule,
 )
@@ -32,6 +75,7 @@ from src.services.ai_agent.monitors.system import (
     HighCPURule,
     HighMemoryRule,
 )
+from src.services.ai_agent.approval import ApprovalQueue
 from src.services.ai_agent.notifications import NotificationDispatcher, NotificationSettings
 from src.services.ai_agent.prevention import PatternTracker
 from src.services.ai_agent.rules import AgentContext, Detection, RuleRegistry
@@ -68,24 +112,71 @@ class AIAgent:
             smtp_config=NotificationSettings(),
         )
 
+        # Approval queue
+        self._approval_queue = ApprovalQueue(db=ctx.db, config=ctx.agent_config)
+
     def _register_rules(self) -> None:
         """Register all monitor rules."""
         # System
         self._rule_registry.register(HighCPURule())
         self._rule_registry.register(HighMemoryRule())
         self._rule_registry.register(DiskSpaceRule())
+        # Infrastructure
+        self._rule_registry.register(PostgreSQLConnectionsRule())
+        self._rule_registry.register(InfraRedisMemoryRule())
+        self._rule_registry.register(DashScopeLatencyRule())
+        self._rule_registry.register(ASRLatencyRule())
+        self._rule_registry.register(TTSLatencyRule())
+        self._rule_registry.register(ASRConnectionRule())
+        self._rule_registry.register(TTSConnectionRule())
+        self._rule_registry.register(DashScopeQuotaRule())
+        self._rule_registry.register(RunPodHealthRule())
+        self._rule_registry.register(RunPodQueueDepthRule())
+        self._rule_registry.register(RunPodRenderTimeRule())
+        self._rule_registry.register(RunPodWorkersRule())
+        self._rule_registry.register(RunPodColdStartRule())
+        self._rule_registry.register(RunPodTaskTimeRule())
+        self._rule_registry.register(RunPodR2LatencyRule())
+        self._rule_registry.register(RunPodTimeoutRule())
+        self._rule_registry.register(R2ConnectivityRule())
+        # Resilience
+        self._rule_registry.register(RunPodConsecutiveFailureRule())
+        self._rule_registry.register(DashScopeConsecutiveTimeoutRule())
+        self._rule_registry.register(DashScopeQueueDepthRule())
+        self._rule_registry.register(R2DowntimeRule())
+        self._rule_registry.register(MarginSqueezeRule())
+        # Predictions
+        self._rule_registry.register(DashScopeQuotaExhaustionRule())
+        self._rule_registry.register(RunPodCostProjectionRule())
+        self._rule_registry.register(CustomerMarginPredictionRule())
+        self._rule_registry.register(VRMVideoRatioRule())
         # Business
         self._rule_registry.register(ChurnRiskRule())
         self._rule_registry.register(QuotaExhaustionRule())
         self._rule_registry.register(EscalationSpikeRule())
+        self._rule_registry.register(FailedPaymentRule())
+        self._rule_registry.register(TrainingStallRule())
+        self._rule_registry.register(OnboardingStuckRule())
         # Security
         self._rule_registry.register(PolicyViolationSpikeRule())
         self._rule_registry.register(SuspiciousActivityRule())
+        self._rule_registry.register(FailedAuthRule())
+        self._rule_registry.register(APIUsageSpikeRule())
+
+        # Stale session cleanup (scheduled)
+        self._stale_session_fix = StaleSessionFix()
+        self._stale_session_task: Optional[asyncio.Task[None]] = None
 
     def _register_fixes(self) -> None:
         """Register auto-fix handlers."""
-        self._fix_registry.register("system.high_memory", CacheClearFix())
-        self._fix_registry.register("business.quota_exhaustion", QuotaWarningFix())
+        self._fix_registry.register("system.high_memory", MemoryCleanupFix())
+        self._fix_registry.register("infra.pg_connections", DBConnectionFix())
+        self._fix_registry.register("infra.redis_memory", RedisMemoryFix())
+        self._fix_registry.register("infra.runpod_workers", WarmupJobFix())
+        self._fix_registry.register("business.quota_exhaustion", QuotaGraceFix())
+        self._fix_registry.register("security.api_spike", RateLimitThrottleFix())
+        self._fix_registry.register("resilience.runpod_consecutive_failures", VideoDisableFix())
+        self._fix_registry.register("resilience.dashscope_consecutive_timeouts", TextOnlyModeFix())
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -96,6 +187,7 @@ class AIAgent:
         self._running = True
         await self._notifier.start()
         self._task = asyncio.create_task(self._loop())
+        self._stale_session_task = asyncio.create_task(self._stale_session_loop())
         logger.info("AI Agent started", extra={
             "scan_interval_s": self._ctx.agent_config.scan_interval_s,
             "rules_count": len(self._rule_registry.rules),
@@ -104,13 +196,15 @@ class AIAgent:
     async def stop(self) -> None:
         """Stop the background loop."""
         self._running = False
-        if self._task is not None:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        for task in (self._task, self._stale_session_task):
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._task = None
+        self._stale_session_task = None
         await self._notifier.stop()
         logger.info("AI Agent stopped")
 
@@ -121,6 +215,8 @@ class AIAgent:
                 detections = await self._rule_registry.run_all(self._ctx)
                 for d in detections:
                     await self._handle_detection(d)
+                # Expire stale approval requests
+                await self._approval_queue.expire_stale()
                 self._last_scan = datetime.utcnow()
                 self._scan_count += 1
                 if detections:
@@ -131,6 +227,19 @@ class AIAgent:
             except Exception as exc:
                 logger.error(f"Agent scan failed: {exc}")
             await asyncio.sleep(self._ctx.agent_config.scan_interval_s)
+
+    async def _stale_session_loop(self) -> None:
+        """Periodically clean up stale visitor sessions."""
+        interval = self._ctx.agent_config.stale_session_check_interval_s
+        while self._running:
+            try:
+                result = await self._stale_session_fix.apply_scheduled(self._ctx)
+                closed = result.get("sessions_closed", 0)
+                if closed:
+                    logger.info(f"Stale session cleanup: {closed} sessions closed")
+            except Exception as exc:
+                logger.debug(f"Stale session loop error: {exc}")
+            await asyncio.sleep(interval)
 
     # ── Detection Handling ────────────────────────────────────────────────
 
@@ -250,6 +359,10 @@ class AIAgent:
             logger.error(f"Failed to update incident status: {exc}")
 
     # ── Public Query Methods (for API routes) ─────────────────────────────
+
+    @property
+    def approval_queue(self) -> ApprovalQueue:
+        return self._approval_queue
 
     async def get_stats(self) -> dict[str, Any]:
         """Return agent summary statistics."""

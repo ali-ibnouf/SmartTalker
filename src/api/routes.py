@@ -344,6 +344,98 @@ async def health_check(request: Request) -> HealthResponse:
     return HealthResponse(**health)
 
 
+@router.get("/health/db", summary="Database Health", tags=["health"])
+async def health_db(request: Request):
+    """Check PostgreSQL connectivity."""
+    db = getattr(request.app.state, "db", None)
+    if db is None:
+        return {"status": "unavailable", "detail": "No database configured"}
+    try:
+        from sqlalchemy import text
+        async with db.session() as session:
+            await session.execute(text("SELECT 1"))
+        return {"status": "healthy"}
+    except Exception as exc:
+        return {"status": "unhealthy", "detail": str(exc)}
+
+
+@router.get("/health/redis", summary="Redis Health", tags=["health"])
+async def health_redis(request: Request):
+    """Check Redis connectivity."""
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        return {"status": "unavailable", "detail": "No Redis configured"}
+    try:
+        await redis.ping()
+        return {"status": "healthy"}
+    except Exception as exc:
+        return {"status": "unhealthy", "detail": str(exc)}
+
+
+@router.get("/health/dashscope", summary="DashScope API Health", tags=["health"])
+async def health_dashscope(request: Request):
+    """Check DashScope API connectivity (lightweight model list call)."""
+    config = getattr(request.app.state, "config", None)
+    if not config or not getattr(config, "dashscope_api_key", ""):
+        return {"status": "unavailable", "detail": "DashScope not configured"}
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+                headers={"Authorization": f"Bearer {config.dashscope_api_key}"},
+            )
+            return {
+                "status": "healthy" if resp.status_code == 200 else "degraded",
+                "status_code": resp.status_code,
+            }
+    except Exception as exc:
+        return {"status": "unhealthy", "detail": str(exc)}
+
+
+@router.get("/health/runpod", summary="RunPod Health", tags=["health"])
+async def health_runpod(request: Request):
+    """Check RunPod endpoint availability."""
+    config = getattr(request.app.state, "config", None)
+    if not config or not getattr(config, "runpod_api_key", ""):
+        return {"status": "unavailable", "detail": "RunPod not configured"}
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{config.runpod_render_endpoint}/health",
+                headers={"Authorization": f"Bearer {config.runpod_api_key}"},
+            )
+            return {
+                "status": "healthy" if resp.status_code in (200, 401) else "degraded",
+                "status_code": resp.status_code,
+            }
+    except Exception as exc:
+        return {"status": "unhealthy", "detail": str(exc)}
+
+
+@router.get("/health/r2", summary="R2 Storage Health", tags=["health"])
+async def health_r2(request: Request):
+    """Check Cloudflare R2 connectivity."""
+    config = getattr(request.app.state, "config", None)
+    if not config or not getattr(config, "r2_access_key", ""):
+        return {"status": "unavailable", "detail": "R2 not configured"}
+    try:
+        import boto3
+        from botocore.config import Config as BotoConfig
+        client = boto3.client(
+            "s3",
+            endpoint_url=config.r2_endpoint_url,
+            aws_access_key_id=config.r2_access_key,
+            aws_secret_access_key=config.r2_secret_key,
+            config=BotoConfig(region_name="auto"),
+        )
+        client.head_bucket(Bucket=config.r2_bucket_name)
+        return {"status": "healthy"}
+    except Exception as exc:
+        return {"status": "unhealthy", "detail": str(exc)}
+
+
 # =============================================================================
 # Languages (public)
 # =============================================================================
@@ -2768,3 +2860,73 @@ def _build_public_audio_url(file_path: str, app) -> str:
     
     # Fallback to empty string (resulting in relative URL) if no public URL configured
     return f"{base_url}/files/{relative}"
+
+
+# =============================================================================
+# Subscription Lifecycle: Freeze / Cancel / Reactivate
+# =============================================================================
+
+
+@router.post(
+    "/admin/subscriptions/{customer_id}/freeze",
+    summary="Freeze Subscription",
+    description="Temporarily suspend a customer's service.",
+    tags=["admin"],
+)
+async def freeze_subscription(
+    customer_id: str,
+    request: Request,
+    reason: str = Query(default="", description="Reason for freezing"),
+):
+    from src.services.subscription import SubscriptionLifecycle
+
+    db = getattr(request.app.state, "db", None)
+    lifecycle = SubscriptionLifecycle(db=db)
+    result = await lifecycle.freeze(customer_id, reason=reason)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post(
+    "/admin/subscriptions/{customer_id}/cancel",
+    summary="Cancel Subscription",
+    description="Permanently cancel a customer's subscription.",
+    tags=["admin"],
+)
+async def cancel_subscription(
+    customer_id: str,
+    request: Request,
+    reason: str = Query(default="", description="Cancellation reason"),
+    purge_media: bool = Query(default=False, description="Immediately purge R2 media"),
+):
+    from src.services.subscription import SubscriptionLifecycle
+
+    db = getattr(request.app.state, "db", None)
+    r2 = getattr(request.app.state, "storage", None)
+    lifecycle = SubscriptionLifecycle(db=db, r2_storage=r2)
+    result = await lifecycle.cancel(customer_id, reason=reason, purge_media=purge_media)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post(
+    "/admin/subscriptions/{customer_id}/reactivate",
+    summary="Reactivate Subscription",
+    description="Reactivate a frozen or cancelled subscription.",
+    tags=["admin"],
+)
+async def reactivate_subscription(
+    customer_id: str,
+    request: Request,
+    plan_id: str = Query(default="", description="New plan ID (optional)"),
+):
+    from src.services.subscription import SubscriptionLifecycle
+
+    db = getattr(request.app.state, "db", None)
+    lifecycle = SubscriptionLifecycle(db=db)
+    result = await lifecycle.reactivate(customer_id, plan_id=plan_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result

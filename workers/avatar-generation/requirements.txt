@@ -1,0 +1,15 @@
+# =============================================================================
+# Avatar Generation Worker — GPU Dependencies (RunPod Serverless)
+# =============================================================================
+
+runpod>=1.7.0
+diffusers>=0.31.0
+transformers>=4.44.0
+accelerate>=0.34.0
+safetensors
+imageio[ffmpeg]
+imageio-ffmpeg
+numpy
+Pillow
+sentencepiece
+requests

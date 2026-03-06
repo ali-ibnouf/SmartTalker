@@ -1,0 +1,1285 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.11, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\User\AppData\Local\Programs\Python\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\User\Documents\smart talker\SmartTalker
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 21 items
+
+tests/test_api_analytics.py::test_get_kpis FAILED                        [  4%]
+tests/test_api_analytics.py::test_get_timeseries FAILED                  [  9%]
+tests/test_api_analytics.py::test_get_dashboard FAILED                   [ 14%]
+tests/test_api_analytics.py::test_get_drift FAILED                       [ 19%]
+tests/test_api_analytics.py::test_export_report FAILED                   [ 23%]
+tests/test_api_analytics.py::test_list_operators FAILED                  [ 28%]
+tests/test_api_analytics.py::test_get_operator FAILED                    [ 33%]
+tests/test_api_analytics.py::test_active_sessions FAILED                 [ 38%]
+tests/test_api_analytics.py::test_review_queue FAILED                    [ 42%]
+tests/test_api_analytics.py::test_submit_review FAILED                   [ 47%]
+tests/test_api_analytics.py::test_activity_timeline FAILED               [ 52%]
+tests/test_api_analytics.py::test_get_policy FAILED                      [ 57%]
+tests/test_api_analytics.py::test_set_policy PASSED                      [ 61%]
+tests/test_api_analytics.py::test_delete_policy PASSED                   [ 66%]
+tests/test_api_analytics.py::test_list_violations FAILED                 [ 71%]
+tests/test_api_analytics.py::test_guardrails_audit FAILED                [ 76%]
+tests/test_api_analytics.py::test_quality_stats FAILED                   [ 80%]
+tests/test_api_analytics.py::test_improvement_timeline FAILED            [ 85%]
+tests/test_api_analytics.py::test_consolidate_daily FAILED               [ 90%]
+tests/test_api_analytics.py::test_export_qa_pairs FAILED                 [ 95%]
+tests/test_api_analytics.py::test_weak_areas FAILED                      [100%]
+
+================================== FAILURES ===================================
+________________________________ test_get_kpis ________________________________
+tests\test_api_analytics.py:137: in test_get_kpis
+    assert data["total_conversations"] == 100
+E   assert 0 == 100
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:07", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:38:11", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:38:15", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:38:15", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:38:15", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:38:15", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:38:15", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 0}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:38:15", "level": "WARNING", "module": "api.middleware", "message": "No API key configured \u2014 auth disabled (dev mode)", "correlation_id": "e5fcc29d28904f16b64cc7912f57412f"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/analytics/test_avatar/kpis", "status": 200, "latency_ms": 2.8, "correlation_id": "e5fcc29d28904f16b64cc7912f57412f"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_____________________________ test_get_timeseries _____________________________
+tests\test_api_analytics.py:145: in test_get_timeseries
+    assert len(data["points"]) == 1
+E   AssertionError: assert 30 == 1
+E    +  where 30 = len([{'date': '2026-01-31', 'value': 0.0}, {'date': '2026-02-01', 'value': 0.0}, {'date': '2026-02-02', 'value': 0.0}, {'date': '2026-02-03', 'value': 0.0}, {'date': '2026-02-04', 'value': 0.0}, {'date': '2026-02-05', 'value': 0.0}, ...])
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:15", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:38:19", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:38:23", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:38:23", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:38:23", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:38:23", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:38:23", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 2}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/analytics/test_avatar/timeseries", "status": 200, "latency_ms": 29.06, "correlation_id": "fd59a7e4de424a8f9a6557edc03cf434"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_____________________________ test_get_dashboard ______________________________
+tests\test_api_analytics.py:150: in test_get_dashboard
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:23", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:38:27", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:38:31", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:38:31", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:38:31", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:38:31", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:38:31", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:38:31", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/analytics/test_avatar/dashboard", "status": 500, "latency_ms": 42.16, "correlation_id": "425d2913478d4368908fcacb9858f6e5"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_______________________________ test_get_drift ________________________________
+tests\test_api_analytics.py:159: in test_get_drift
+    assert data["count"] == 1
+E   assert 0 == 1
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:32", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:38:36", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:38:40", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:38:40", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:38:40", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:38:40", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:38:40", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/analytics/test_avatar/drift", "status": 200, "latency_ms": 4.25, "correlation_id": "0917b86991cc46719f0824792e871536"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_____________________________ test_export_report ______________________________
+tests\test_api_analytics.py:164: in test_export_report
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:40", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:38:44", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:38:48", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:38:48", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:38:48", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:38:48", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:38:48", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/analytics/test_avatar/report", "status": 500, "latency_ms": 39.37, "correlation_id": "97969a0c5f3c47ff90e1d8468affd9da"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_____________________________ test_list_operators _____________________________
+tests\test_api_analytics.py:177: in test_list_operators
+    assert data["count"] == 1
+E   assert 0 == 1
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:48", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:38:52", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:38:56", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:38:56", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:38:56", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:38:56", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:38:56", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/supervisor/operators", "status": 200, "latency_ms": 1.32, "correlation_id": "5cf9b05440ba47ff9601fe21c9704e70"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+______________________________ test_get_operator ______________________________
+tests\test_api_analytics.py:185: in test_get_operator
+    assert data["quality_score"] == 0.95
+E   assert 0.0 == 0.95
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:38:56", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:39:00", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:39:04", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:39:04", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:39:04", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:39:04", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:39:04", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/supervisor/operators/op_1", "status": 200, "latency_ms": 2.04, "correlation_id": "95acfd5ba2c344cbbb069746ba49346d"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+____________________________ test_active_sessions _____________________________
+tests\test_api_analytics.py:189: in test_active_sessions
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:39:04", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:39:08", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:39:12", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:39:12", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:39:12", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:39:12", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:39:12", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/supervisor/sessions/active", "status": 500, "latency_ms": 1.12, "correlation_id": "b2ce6cf669b34a25ad99bb13ade3f7fb"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+______________________________ test_review_queue ______________________________
+tests\test_api_analytics.py:198: in test_review_queue
+    assert data["count"] == 1
+E   assert 0 == 1
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:39:12", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:39:16", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:39:20", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:39:20", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:39:20", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:39:20", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:39:20", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/supervisor/review-queue", "status": 200, "latency_ms": 1.39, "correlation_id": "05f7c9a07050493293f18c3c8c18843e"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_____________________________ test_submit_review ______________________________
+tests\test_api_analytics.py:204: in test_submit_review
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:39:20", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:39:24", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:39:29", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:39:29", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:39:29", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:39:29", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:39:29", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "POST", "path": "/api/v1/supervisor/review-queue/r1", "status": 500, "latency_ms": 1.75, "correlation_id": "a41a5d9363c54677ac847c4b2a8e0bd7"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+___________________________ test_activity_timeline ____________________________
+tests\test_api_analytics.py:212: in test_activity_timeline
+    assert data["count"] == 1
+E   assert 0 == 1
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:39:29", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:39:33", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:39:37", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:39:37", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:39:37", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:39:37", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:39:37", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/supervisor/activity-timeline", "status": 200, "latency_ms": 1.28, "correlation_id": "3bd2104c333848ecb9954e0f2d0200aa"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_______________________________ test_get_policy _______________________________
+tests\test_api_analytics.py:223: in test_get_policy
+    assert "politics" in data["blocked_topics"]
+E   AssertionError: assert 'politics' in []
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:39:37", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:39:41", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:39:45", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:39:45", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:39:45", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:39:45", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:39:45", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/guardrails/test_avatar/policy", "status": 200, "latency_ms": 2.0, "correlation_id": "61cfa8b7441b4dd1b3d1a415c39dae4f"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:39:45", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+____________________________ test_list_violations _____________________________
+tests\test_api_analytics.py:246: in test_list_violations
+    assert data["count"] == 2
+E   assert 0 == 2
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:01", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:05", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:09", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:09", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:09", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:09", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:09", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/guardrails/test_avatar/violations", "status": 200, "latency_ms": 1.31, "correlation_id": "94d765b7d3b74fb7abf06a821dd946ac"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+____________________________ test_guardrails_audit ____________________________
+tests\test_api_analytics.py:252: in test_guardrails_audit
+    assert data["total_violations"] == 2
+E   assert 0 == 2
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:09", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:13", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:17", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:17", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:17", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:17", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:17", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/guardrails/test_avatar/audit", "status": 200, "latency_ms": 1.75, "correlation_id": "b5139ff92b9c4a3385c55e5a553c6147"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_____________________________ test_quality_stats ______________________________
+tests\test_api_analytics.py:261: in test_quality_stats
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:17", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:21", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:25", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:25", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:25", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:25", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:25", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/training/test_avatar/quality-stats", "status": 500, "latency_ms": 2.08, "correlation_id": "01b8ddcae3c74bd1878b6aaff5e350bb"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:25", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+__________________________ test_improvement_timeline __________________________
+tests\test_api_analytics.py:271: in test_improvement_timeline
+    assert len(data["timeline"]) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:26", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:30", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:34", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:34", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:34", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:34", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:34", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/training/test_avatar/improvement-timeline", "status": 200, "latency_ms": 1.53, "correlation_id": "ddd6a436d6cc44f08573a4605b12e301"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+___________________________ test_consolidate_daily ____________________________
+tests\test_api_analytics.py:276: in test_consolidate_daily
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:34", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:38", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:42", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:42", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:42", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:42", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:42", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.learning_analytics", "message": "Daily consolidation for test_avatar: 0 skills, 0 QA, 0 thresholds adjusted", "correlation_id": "e939034598b04c5f8beb67a5961e0268"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "POST", "path": "/api/v1/training/test_avatar/consolidate", "status": 500, "latency_ms": 1.44, "correlation_id": "e939034598b04c5f8beb67a5961e0268"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+____________________________ test_export_qa_pairs _____________________________
+tests\test_api_analytics.py:285: in test_export_qa_pairs
+    assert data["record_count"] == 1
+E   assert 0 == 1
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:42", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:46", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:50", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:50", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:50", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:50", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:50", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/training/test_avatar/export", "status": 200, "latency_ms": 1.2, "correlation_id": "2968e0f9a2fa4581a7815847f93cc72a"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+_______________________________ test_weak_areas _______________________________
+tests\test_api_analytics.py:290: in test_weak_areas
+    assert response.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = <Response [500 Internal Server Error]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+{"timestamp": "2026-03-02T09:40:50", "level": "INFO", "module": "main", "message": "SmartTalker starting up..."}
+{"timestamp": "2026-03-02T09:40:54", "level": "WARNING", "module": "main", "message": "PostgreSQL connection failed: [WinError 1225] The remote computer refused the network connection"}
+{"timestamp": "2026-03-02T09:40:58", "level": "WARNING", "module": "main", "message": "Redis connection failed, using in-memory fallback: Error 22 connecting to localhost:6379. The remote computer refused the network connection."}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.asr", "message": "ASREngine initialized (FunASR SenseVoice, CPU)", "model_id": "iic/SenseVoiceSmall"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.llm", "message": "LLMEngine initialized (DashScope API)", "model": "qwen-plus", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.tts", "message": "TTSEngine initialized (CosyVoice, CPU mode)"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.emotions", "message": "EmotionEngine initialized"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine initialized"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine initialized"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.orchestrator", "message": "SmartTalkerPipeline initialized (CPU mode)"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsAppClient initialized", "phone_id": "976534568876814", "api_version": "v18.0"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.orchestrator", "message": "Loading pipeline models..."}
+{"timestamp": "2026-03-02T09:40:58", "level": "WARNING", "module": "pipeline.orchestrator", "message": "ASR model failed to load: FunASR not installed"}
+{"timestamp": "2026-03-02T09:40:58", "level": "WARNING", "module": "pipeline.orchestrator", "message": "TTS model failed to load: CosyVoice not installed"}
+{"timestamp": "2026-03-02T09:40:58", "level": "WARNING", "module": "pipeline.emotions", "message": "Emotion model failed to load, using keyword fallback: No module named 'transformers'"}
+{"timestamp": "2026-03-02T09:40:58", "level": "WARNING", "module": "pipeline.orchestrator", "message": "KB engine failed to load: chromadb not installed | Detail: Install with: pip install chromadb>=0.5.0"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.orchestrator", "message": "Pipeline models loaded", "latency_ms": 1}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "Pipeline models loaded successfully"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine loaded (SQLite fallback)", "db_path": "data\\training.db"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "Training engine loaded successfully"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics loaded (SQLite: data\\training.db)"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "LearningAnalytics loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine loaded (SQLite: data\\supervisor.db)"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "SupervisorEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine loaded (SQLite: data\\analytics.db)"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "AnalyticsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine loaded (SQLite: data\\guardrails.db)"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "GuardrailsEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine initialized", "rate": 0.001, "grace_s": 5}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "BillingEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine initialized"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "PersonaEngine loaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.node_manager", "message": "NodeManager initialized"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.kill_switch", "message": "KillSwitch initialized"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "integrations.storage", "message": "StorageManager initialized", "base_dir": "outputs", "max_age_hours": 24}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "SmartTalker ready", "host": "0.0.0.0", "port": 8000}
+---------------------------- Captured stdout call -----------------------------
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "api.middleware", "message": "Request processed", "method": "GET", "path": "/api/v1/training/test_avatar/skills/all/weak-areas", "status": 500, "latency_ms": 1.64, "correlation_id": "872d711b585a4d68a931137a63f3f906"}
+-------------------------- Captured stdout teardown ---------------------------
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "SmartTalker shutting down..."}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.learning_analytics", "message": "LearningAnalytics unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.supervisor", "message": "SupervisorEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.analytics", "message": "AnalyticsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.billing", "message": "BillingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.persona", "message": "PersonaEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.orchestrator", "message": "Unloading all pipeline models..."}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.asr", "message": "ASR engine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.tts", "message": "TTS engine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.emotions", "message": "Emotion model unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.llm", "message": "LLM client closed"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.knowledge_base", "message": "KnowledgeBaseEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.training", "message": "TrainingEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.guardrails", "message": "GuardrailsEngine unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "pipeline.orchestrator", "message": "All pipeline models unloaded"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "integrations.whatsapp", "message": "WhatsApp client closed"}
+{"timestamp": "2026-03-02T09:40:58", "level": "INFO", "module": "main", "message": "Shutdown complete"}
+============================== warnings summary ===============================
+..\..\..\AppData\Local\Programs\Python\Python310\lib\site-packages\pythonjsonlogger\jsonlogger.py:11
+  C:\Users\User\AppData\Local\Programs\Python\Python310\lib\site-packages\pythonjsonlogger\jsonlogger.py:11: DeprecationWarning: pythonjsonlogger.jsonlogger has been moved to pythonjsonlogger.json
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_api_analytics.py::test_get_kpis - assert 0 == 100
+FAILED tests/test_api_analytics.py::test_get_timeseries - AssertionError: ass...
+FAILED tests/test_api_analytics.py::test_get_dashboard - assert 500 == 200
+FAILED tests/test_api_analytics.py::test_get_drift - assert 0 == 1
+FAILED tests/test_api_analytics.py::test_export_report - assert 500 == 200
+FAILED tests/test_api_analytics.py::test_list_operators - assert 0 == 1
+FAILED tests/test_api_analytics.py::test_get_operator - assert 0.0 == 0.95
+FAILED tests/test_api_analytics.py::test_active_sessions - assert 500 == 200
+FAILED tests/test_api_analytics.py::test_review_queue - assert 0 == 1
+FAILED tests/test_api_analytics.py::test_submit_review - assert 500 == 200
+FAILED tests/test_api_analytics.py::test_activity_timeline - assert 0 == 1
+FAILED tests/test_api_analytics.py::test_get_policy - AssertionError: assert ...
+FAILED tests/test_api_analytics.py::test_list_violations - assert 0 == 2
+FAILED tests/test_api_analytics.py::test_guardrails_audit - assert 0 == 2
+FAILED tests/test_api_analytics.py::test_quality_stats - assert 500 == 200
+FAILED tests/test_api_analytics.py::test_improvement_timeline - assert 0 == 1
+FAILED tests/test_api_analytics.py::test_consolidate_daily - assert 500 == 200
+FAILED tests/test_api_analytics.py::test_export_qa_pairs - assert 0 == 1
+FAILED tests/test_api_analytics.py::test_weak_areas - assert 500 == 200
+============= 19 failed, 2 passed, 1 warning in 171.90s (0:02:51) =============

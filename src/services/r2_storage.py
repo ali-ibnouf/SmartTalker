@@ -44,6 +44,13 @@ class R2Storage:
         self._access_key_id = config.r2_access_key_id
         self._secret_access_key = config.r2_secret_access_key
 
+        # Failure tracking (for agent monitoring)
+        from collections import deque
+        self._consecutive_failures: int = 0
+        self._last_failure_time: float = 0.0
+        self._total_failures: int = 0
+        self._recent_upload_times: deque[float] = deque(maxlen=50)  # seconds
+
         logger.info(
             "R2Storage initialized",
             extra={
@@ -268,6 +275,7 @@ class R2Storage:
             content_type: MIME type.
         """
         client = self._get_client()
+        start = time.perf_counter()
         try:
             client.put_object(
                 Bucket=self._bucket,
@@ -275,7 +283,13 @@ class R2Storage:
                 Body=body,
                 ContentType=content_type,
             )
+            elapsed = time.perf_counter() - start
+            self._recent_upload_times.append(elapsed)
+            self._consecutive_failures = 0
         except Exception as exc:
+            self._consecutive_failures += 1
+            self._total_failures += 1
+            self._last_failure_time = time.time()
             raise R2Error(
                 message=f"R2 upload failed: {key}",
                 detail=str(exc),

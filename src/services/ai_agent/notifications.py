@@ -101,6 +101,9 @@ class NotificationDispatcher:
         self._warning_task: Optional[asyncio.Task[None]] = None
         self._info_task: Optional[asyncio.Task[None]] = None
 
+        # Alert cooldown — last dispatch time per rule_id
+        self._last_alert_times: dict[str, float] = {}
+
     async def start(self) -> None:
         """Start background batch flush loops."""
         self._warning_task = asyncio.create_task(self._warning_flush_loop())
@@ -127,7 +130,23 @@ class NotificationDispatcher:
     # ── Public API ────────────────────────────────────────────────────────
 
     async def dispatch(self, d: Detection, incident_id: Optional[str]) -> None:
-        """Route a detection to the appropriate channels by severity."""
+        """Route a detection to the appropriate channels by severity.
+
+        Suppresses duplicate alerts for the same rule_id within the
+        configured cooldown window (audit log still written).
+        """
+        # Check cooldown — suppress WS/email but always write audit
+        if self._is_cooled_down(d.rule_id):
+            self._write_audit_log(d, incident_id, "suppressed")
+            logger.debug(
+                f"Alert suppressed (cooldown): {d.rule_id}",
+                extra={"rule_id": d.rule_id},
+            )
+            return
+
+        # Record this dispatch time
+        self._last_alert_times[d.rule_id] = time.time()
+
         # Always write audit log
         self._write_audit_log(d, incident_id, "open")
 
@@ -138,6 +157,21 @@ class NotificationDispatcher:
             await self._warning_queue.put((d, incident_id))
         elif d.severity == "info":
             await self._info_queue.put((d, incident_id))
+
+    def _is_cooled_down(self, rule_id: str) -> bool:
+        """Return True if the same rule_id was dispatched within its cooldown window."""
+        last = self._last_alert_times.get(rule_id)
+        if last is None:
+            return False
+
+        cooldown_map: dict[str, int] = getattr(
+            self._agent_config, "alert_cooldown", {}
+        )
+        default_cd: int = getattr(
+            self._agent_config, "alert_cooldown_default_s", 60
+        )
+        cooldown_s = cooldown_map.get(rule_id, default_cd)
+        return (time.time() - last) < cooldown_s
 
     async def dispatch_status_change(
         self, incident_id: str, status: str

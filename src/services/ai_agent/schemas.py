@@ -66,3 +66,28 @@ class ScanResponse(BaseModel):
 class IncidentActionResponse(BaseModel):
     incident_id: str
     status: str
+
+
+class ApprovalItem(BaseModel):
+    id: str
+    action_type: str
+    target_id: str
+    description: str = ""
+    details: dict[str, Any] = {}
+    status: str = "pending"
+    requested_by: str = "agent"
+    created_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+class ApprovalListResponse(BaseModel):
+    approvals: list[ApprovalItem] = []
+    count: int = 0
+
+
+class ApprovalActionResponse(BaseModel):
+    approval_id: str
+    status: str
+    action_type: str = ""
+    target_id: str = ""
+    execution_result: dict[str, Any] = {}

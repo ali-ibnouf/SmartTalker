@@ -6,6 +6,7 @@ remediate the detected issue.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Protocol, runtime_checkable
 
 from src.services.ai_agent.rules import AgentContext, Detection
@@ -30,10 +31,11 @@ class AutoFixHandler(Protocol):
 
 
 class FixRegistry:
-    """Maps rule_ids to AutoFixHandler instances."""
+    """Maps rule_ids to AutoFixHandler instances with cooldown enforcement."""
 
     def __init__(self) -> None:
         self._handlers: dict[str, AutoFixHandler] = {}
+        self._last_fix_time: dict[str, float] = {}
 
     def register(self, rule_id: str, handler: AutoFixHandler) -> None:
         self._handlers[rule_id] = handler
@@ -46,6 +48,16 @@ class FixRegistry:
         if handler is None:
             return None
 
+        # Cooldown check
+        cooldown_s = ctx.agent_config.fix_cooldown_s
+        last_time = self._last_fix_time.get(handler.fix_id, 0)
+        if time.time() - last_time < cooldown_s:
+            logger.debug(
+                f"Fix {handler.fix_id} skipped (cooldown)",
+                extra={"rule_id": detection.rule_id},
+            )
+            return None
+
         if not await handler.can_fix(detection, ctx):
             logger.info(
                 f"Fix {handler.fix_id} cannot handle detection",
@@ -55,6 +67,7 @@ class FixRegistry:
 
         try:
             result = await handler.apply(detection, ctx)
+            self._last_fix_time[handler.fix_id] = time.time()
             logger.info(
                 f"Auto-fix applied: {handler.fix_id}",
                 extra={"rule_id": detection.rule_id, "result": result},
@@ -130,32 +143,6 @@ class CacheClearFix:
         return {"action": "cache_cleared", "keys_deleted": cleared}
 
 
-class HeartbeatReconnectFix:
-    """Marks a timed-out node for reconnection."""
-
-    fix_id = "fix.heartbeat_reconnect"
-
-    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
-        return (
-            detection.rule_id == "gpu.heartbeat_timeout"
-            and "node_id" in detection.details
-        )
-
-    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
-        node_id = detection.details["node_id"]
-        nm = ctx.node_manager
-        node = nm.get_node(node_id)
-        if node is None:
-            return {"action": "skip", "reason": "node already deregistered"}
-
-        # Mark node offline so it won't receive new sessions
-        node.status = "offline"
-        return {
-            "action": "marked_offline",
-            "node_id": node_id,
-            "hostname": detection.details.get("hostname", ""),
-        }
-
 
 class QuotaWarningFix:
     """Logs a notification for near-quota customers."""
@@ -182,4 +169,402 @@ class QuotaWarningFix:
             "customer_id": customer_id,
             "usage_pct": usage_pct,
             "message": f"Customer at {usage_pct:.0f}% quota — upgrade offer recommended.",
+        }
+
+
+class MemoryCleanupFix:
+    """Clears expired Redis keys and closes idle WS sessions to free memory."""
+
+    fix_id = "fix.memory_cleanup"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return detection.rule_id == "system.high_memory"
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        cleared_keys = 0
+
+        # Clear Redis cache keys
+        if ctx.redis is not None:
+            for pattern in ["session:*", "plan:*", "rate:*"]:
+                try:
+                    keys: list[Any] = []
+                    async for key in ctx.redis.scan_iter(match=pattern, count=100):
+                        keys.append(key)
+                    if keys:
+                        await ctx.redis.delete(*keys)
+                        cleared_keys += len(keys)
+                except Exception:
+                    pass
+
+        # Close idle WS sessions older than threshold
+        closed_sessions = 0
+        if ctx.operator_manager is not None:
+            try:
+                timeout_min = ctx.agent_config.stale_session_timeout_min
+                sessions = getattr(ctx.operator_manager, "get_active_sessions", lambda: [])()
+                now = time.time()
+                for s in sessions:
+                    last_activity = getattr(s, "last_activity", now)
+                    if isinstance(last_activity, (int, float)) and (now - last_activity) > timeout_min * 60:
+                        close_fn = getattr(ctx.operator_manager, "close_session", None)
+                        if close_fn:
+                            await close_fn(s.session_id)
+                            closed_sessions += 1
+            except Exception as exc:
+                logger.debug(f"Session cleanup failed: {exc}")
+
+        return {
+            "action": "memory_cleanup",
+            "redis_keys_cleared": cleared_keys,
+            "sessions_closed": closed_sessions,
+        }
+
+
+class DBConnectionFix:
+    """Terminates idle PostgreSQL connections to free up connection slots."""
+
+    fix_id = "fix.db_connection_cleanup"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return detection.rule_id == "infra.pg_connections" and ctx.db is not None
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        if ctx.db is None:
+            return {"action": "skip", "reason": "no database"}
+
+        try:
+            from sqlalchemy import text
+
+            async with ctx.db.session_ctx() as session:
+                # Kill idle connections older than 5 minutes (not our own)
+                result = await session.execute(text(
+                    "SELECT pg_terminate_backend(pid) "
+                    "FROM pg_stat_activity "
+                    "WHERE state = 'idle' "
+                    "AND query_start < now() - interval '300 seconds' "
+                    "AND pid <> pg_backend_pid()"
+                ))
+                killed = sum(1 for row in result if row[0])
+
+            # Re-check usage
+            usage_pct = detection.details.get("usage_pct", 0)
+            if usage_pct >= 85 and killed == 0:
+                return {
+                    "action": "escalate",
+                    "reason": "Still above 85% after cleanup, no idle connections to kill",
+                    "killed": 0,
+                }
+
+            return {
+                "action": "db_connection_cleanup",
+                "connections_killed": killed,
+            }
+        except Exception as exc:
+            return {"action": "error", "error": str(exc)}
+
+
+class StaleSessionFix:
+    """Closes visitor sessions inactive longer than the configured timeout.
+
+    This fix runs on a schedule (not triggered by rule detection).
+    The AIAgent._stale_session_loop() calls apply() directly.
+    """
+
+    fix_id = "fix.stale_session_cleanup"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return False  # Only called via scheduled loop, not rule-based
+
+    async def apply_scheduled(self, ctx: AgentContext) -> dict[str, Any]:
+        """Scheduled cleanup — not triggered by a Detection."""
+        closed = 0
+        if ctx.operator_manager is None:
+            return {"action": "skip", "reason": "no operator_manager"}
+
+        try:
+            timeout_min = ctx.agent_config.stale_session_timeout_min
+            sessions = getattr(ctx.operator_manager, "get_active_sessions", lambda: [])()
+            now = time.time()
+
+            for s in sessions:
+                last_activity = getattr(s, "last_activity", now)
+                if isinstance(last_activity, (int, float)) and (now - last_activity) > timeout_min * 60:
+                    close_fn = getattr(ctx.operator_manager, "close_session", None)
+                    if close_fn:
+                        await close_fn(s.session_id)
+                        closed += 1
+        except Exception as exc:
+            logger.warning(f"Stale session cleanup failed: {exc}")
+
+        if closed:
+            logger.info(f"Stale session cleanup: closed {closed} sessions")
+
+        return {"action": "stale_session_cleanup", "sessions_closed": closed}
+
+
+class QuotaGraceFix:
+    """Grants a grace period when a customer exceeds their quota.
+
+    When usage >= 100%: sets a 2-hour grace period on the subscription.
+    After grace period expires, the rate limiter enforces throttling.
+    """
+
+    fix_id = "fix.quota_grace"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return (
+            detection.rule_id == "business.quota_exhaustion"
+            and detection.details.get("usage_pct", 0) >= 100
+            and ctx.db is not None
+        )
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        if ctx.db is None:
+            return {"action": "skip", "reason": "no database"}
+
+        customer_id = detection.details.get("customer_id", "")
+        grace_hours = ctx.agent_config.quota_grace_hours
+
+        try:
+            from datetime import datetime, timedelta
+
+            from sqlalchemy import update
+            from src.db.models import Subscription
+
+            grace_until = datetime.utcnow() + timedelta(hours=grace_hours)
+
+            async with ctx.db.session_ctx() as session:
+                await session.execute(
+                    update(Subscription)
+                    .where(
+                        Subscription.customer_id == customer_id,
+                        Subscription.is_active == True,  # noqa: E712
+                    )
+                    .values(grace_period_until=grace_until)
+                )
+
+            logger.info(
+                f"Quota grace period set for customer {customer_id}",
+                extra={"grace_until": grace_until.isoformat()},
+            )
+
+            return {
+                "action": "quota_grace_set",
+                "customer_id": customer_id,
+                "grace_hours": grace_hours,
+                "grace_until": grace_until.isoformat(),
+            }
+        except Exception as exc:
+            return {"action": "error", "error": str(exc)}
+
+
+class RateLimitThrottleFix:
+    """Temporarily throttles a customer's API rate limit via Redis."""
+
+    fix_id = "fix.rate_throttle"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return (
+            detection.rule_id == "security.api_spike"
+            and "customer_id" in detection.details
+            and ctx.redis is not None
+        )
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        if ctx.redis is None:
+            return {"action": "skip", "reason": "no redis"}
+
+        customer_id = detection.details["customer_id"]
+        ttl = ctx.agent_config.throttle_duration_s
+        limit = ctx.agent_config.throttle_rate_limit
+
+        try:
+            key = f"throttle:{customer_id}"
+            await ctx.redis.set(key, limit, ex=ttl)
+
+            logger.info(
+                f"Rate throttle applied for customer {customer_id}",
+                extra={"limit": limit, "ttl_s": ttl},
+            )
+
+            return {
+                "action": "rate_throttle_applied",
+                "customer_id": customer_id,
+                "throttle_limit": limit,
+                "ttl_seconds": ttl,
+            }
+        except Exception as exc:
+            return {"action": "error", "error": str(exc)}
+
+
+class WarmupJobFix:
+    """Sends a lightweight warmup job to RunPod when no idle workers are available.
+
+    Prevents cold start latency by proactively spinning up a worker.
+    Has its own 10-minute cooldown to avoid spamming warmup jobs.
+    """
+
+    fix_id = "fix.runpod_warmup"
+
+    def __init__(self) -> None:
+        self._last_applied: float = 0.0
+        self._cooldown_s: float = 600.0  # 10 minutes
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        if time.time() - self._last_applied < self._cooldown_s:
+            return False
+        return (
+            detection.rule_id == "infra.runpod_workers"
+            and detection.details.get("idle", 0) == 0
+            and ctx.config is not None
+        )
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        config = ctx.config
+        endpoint_url = getattr(config, "runpod_endpoint_musetalk", "") or ""
+        api_key = getattr(config, "runpod_api_key", "") or ""
+
+        if not endpoint_url or not api_key:
+            return {"action": "skip", "reason": "RunPod endpoint not configured"}
+
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{endpoint_url}/run",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"input": {"task": "warmup"}},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                job_id = data.get("id", "")
+
+            self._last_applied = time.time()
+            logger.info(
+                "RunPod warmup job sent",
+                extra={"job_id": job_id, "endpoint": endpoint_url},
+            )
+
+            return {
+                "action": "runpod_warmup_sent",
+                "job_id": job_id,
+                "active_customers": detection.details.get("active_customers", 0),
+            }
+        except Exception as exc:
+            return {"action": "error", "error": str(exc)}
+
+
+class VideoDisableFix:
+    """Disables video rendering on the RunPod client after consecutive failures.
+
+    Sets runpod.video_disabled = True so the visitor WS handler
+    sends fallback_vrm instead of attempting GPU renders.
+    """
+
+    fix_id = "fix.video_disable"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        if detection.rule_id != "resilience.runpod_consecutive_failures":
+            return False
+        if ctx.pipeline is None:
+            return False
+        runpod = getattr(ctx.pipeline, "_runpod", None) or getattr(ctx.pipeline, "_runpod_client", None)
+        if runpod is None:
+            return False
+        return not getattr(runpod, "video_disabled", False)
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        runpod = getattr(ctx.pipeline, "_runpod", None) or getattr(ctx.pipeline, "_runpod_client", None)
+        if runpod is None:
+            return {"action": "skip", "reason": "no runpod client"}
+
+        runpod.video_disabled = True
+        failures = detection.details.get("consecutive_failures", 0)
+        logger.info(
+            f"Video rendering disabled after {failures} consecutive failures",
+            extra={"consecutive_failures": failures},
+        )
+        return {
+            "action": "video_disabled",
+            "consecutive_failures": failures,
+            "message": "Video rendering disabled — visitors will receive VRM fallback.",
+        }
+
+
+class TextOnlyModeFix:
+    """Enables text-only mode on the LLM engine after consecutive timeouts.
+
+    Sets llm.text_only_mode = True so the pipeline skips TTS/rendering
+    and returns text responses only.
+    """
+
+    fix_id = "fix.text_only_mode"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        if detection.rule_id != "resilience.dashscope_consecutive_timeouts":
+            return False
+        if ctx.pipeline is None:
+            return False
+        llm = getattr(ctx.pipeline, "_llm", None)
+        if llm is None:
+            return False
+        return not getattr(llm, "text_only_mode", False)
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        llm = getattr(ctx.pipeline, "_llm", None)
+        if llm is None:
+            return {"action": "skip", "reason": "no llm engine"}
+
+        llm.text_only_mode = True
+        timeouts = detection.details.get("consecutive_timeouts", 0)
+        logger.info(
+            f"Text-only mode enabled after {timeouts} consecutive DashScope timeouts",
+            extra={"consecutive_timeouts": timeouts},
+        )
+        return {
+            "action": "text_only_mode_enabled",
+            "consecutive_timeouts": timeouts,
+            "message": "Text-only mode enabled — TTS and rendering skipped.",
+        }
+
+
+class RedisMemoryFix:
+    """Frees Redis memory by purging and clearing safe-to-evict cache keys."""
+
+    fix_id = "fix.redis_memory"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return detection.rule_id == "infra.redis_memory" and ctx.redis is not None
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        if ctx.redis is None:
+            return {"action": "skip", "reason": "no redis"}
+
+        cleared = 0
+        try:
+            # memory purge (defrag)
+            try:
+                await ctx.redis.execute_command("MEMORY", "PURGE")
+            except Exception:
+                pass  # Not supported on all Redis versions
+
+            # Clear safe-to-evict cache keys (plan cache refetches on miss)
+            for pattern in ["plan:*", "session:*"]:
+                keys: list[Any] = []
+                async for key in ctx.redis.scan_iter(match=pattern, count=200):
+                    keys.append(key)
+                if keys:
+                    await ctx.redis.delete(*keys)
+                    cleared += len(keys)
+
+        except Exception as exc:
+            return {"action": "error", "error": str(exc)}
+
+        return {
+            "action": "redis_memory_cleanup",
+            "keys_cleared": cleared,
         }

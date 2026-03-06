@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartTalker — Admin Dashboard</title>
+    <meta name="description" content="Admin dashboard for monitoring SmartTalker KPIs and review queues">
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+
+<body>
+    <!-- ── Header ─────────────────────────────────────────────────── -->
+    <header id="header">
+        <div class="header-left">
+            <h1>SmartTalker</h1>
+            <span class="subtitle">Admin Dashboard</span>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">Chat</a>
+            <a href="operator.html">Operator Console</a>
+            <a href="dashboard.html" class="active">Dashboard</a>
+        </nav>
+        <div class="header-right">
+            <label for="cfg-avatar">Avatar ID:</label>
+            <input type="text" id="cfg-avatar" value="default" />
+            <button id="refresh-btn">Refresh</button>
+        </div>
+    </header>
+
+    <!-- ── Main Layout ────────────────────────────────────────────── -->
+    <main id="main">
+
+        <!-- Top: KPI Cards -->
+        <section id="kpi-section" class="card-grid">
+            <div class="kpi-card">
+                <h3>Total Conversations</h3>
+                <div class="kpi-value" id="kpi-conversations">--</div>
+            </div>
+            <div class="kpi-card">
+                <h3>Autonomy Rate</h3>
+                <div class="kpi-value" id="kpi-autonomy">--%</div>
+            </div>
+            <div class="kpi-card">
+                <h3>Avg Resolution Time</h3>
+                <div class="kpi-value" id="kpi-resolution">--s</div>
+            </div>
+            <div class="kpi-card">
+                <h3>Total Cost</h3>
+                <div class="kpi-value" id="kpi-cost">$0.00</div>
+            </div>
+        </section>
+
+        <!-- Middle: Drift & Guardrails Alerts -->
+        <section class="two-col-layout">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>⚠️ Drift Alerts</h2>
+                </div>
+                <div class="panel-content" id="drift-alerts">
+                    <div class="empty-state">No drift detected</div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🛡️ Guardrail Violations</h2>
+                </div>
+                <div class="panel-content" id="guardrail-violations">
+                    <div class="empty-state">No recent violations</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bottom: Review Queue & Timeline -->
+        <section class="two-col-layout">
+            <div class="panel queue-panel">
+                <div class="panel-header">
+                    <h2>🔍 Review Queue</h2>
+                </div>
+                <div class="panel-content" id="review-queue">
+                    <div class="empty-state">Queue is empty!</div>
+                </div>
+            </div>
+            <div class="panel timeline-panel">
+                <div class="panel-header">
+                    <h2>⏱️ Activity Timeline</h2>
+                </div>
+                <div class="panel-content" id="activity-timeline">
+                    <div class="empty-state">No recent activity</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ── Footer ─────────────────────────────────────────────────── -->
+    <footer id="footer">
+        <span>SmartTalker Admin v1.0</span>
+    </footer>
+
+    <script src="dashboard.js"></script>
+</body>
+
+</html>

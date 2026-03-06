@@ -41,7 +41,6 @@ def agent_config():
         disk_warn_pct=90.0,
         fps_min=20.0,
         vram_warn_pct=90.0,
-        heartbeat_timeout_s=120,
         churn_days_inactive=7,
         quota_warn_pct=90.0,
         escalation_rate_warn=0.2,
@@ -403,33 +402,6 @@ class TestGPURules:
         assert len(detections) == 0
 
     @pytest.mark.asyncio
-    async def test_heartbeat_timeout(self, agent_ctx):
-        from src.services.ai_agent.monitors.gpu import NodeHeartbeatRule
-        import time
-
-        rule = NodeHeartbeatRule()
-        node = self.FakeNode(last_heartbeat=time.time() - 300)
-        agent_ctx.node_manager = MagicMock()
-        agent_ctx.node_manager.list_nodes.return_value = [node]
-
-        detections = await rule.evaluate(agent_ctx)
-        assert len(detections) == 1
-        assert detections[0].severity == "critical"
-
-    @pytest.mark.asyncio
-    async def test_heartbeat_ok(self, agent_ctx):
-        from src.services.ai_agent.monitors.gpu import NodeHeartbeatRule
-        import time
-
-        rule = NodeHeartbeatRule()
-        node = self.FakeNode(last_heartbeat=time.time() - 30)
-        agent_ctx.node_manager = MagicMock()
-        agent_ctx.node_manager.list_nodes.return_value = [node]
-
-        detections = await rule.evaluate(agent_ctx)
-        assert len(detections) == 0
-
-    @pytest.mark.asyncio
     async def test_offline_nodes_skipped(self, agent_ctx):
         from src.services.ai_agent.monitors.gpu import NodeFPSDropRule
 
@@ -505,29 +477,6 @@ class TestFixHandlers:
         assert await fix.can_fix(d, agent_ctx) is True
         result = await fix.apply(d, agent_ctx)
         assert result["action"] == "cache_cleared"
-
-    @pytest.mark.asyncio
-    async def test_heartbeat_reconnect_fix(self, agent_ctx):
-        from src.services.ai_agent.fixes.handlers import HeartbeatReconnectFix
-
-        fix = HeartbeatReconnectFix()
-        node = MagicMock()
-        node.status = "online"
-        agent_ctx.node_manager = MagicMock()
-        agent_ctx.node_manager.get_node.return_value = node
-
-        d = Detection(
-            rule_id="gpu.heartbeat_timeout",
-            severity="critical",
-            title="Timeout",
-            description="",
-            details={"node_id": "n1", "hostname": "gpu-1"},
-            auto_fixable=True,
-        )
-        assert await fix.can_fix(d, agent_ctx) is True
-        result = await fix.apply(d, agent_ctx)
-        assert result["action"] == "marked_offline"
-        assert node.status == "offline"
 
     @pytest.mark.asyncio
     async def test_quota_warning_fix(self, agent_ctx):
@@ -714,9 +663,11 @@ class TestAIAgent:
         agent = AIAgent(agent_ctx)
         assert "system.high_memory" in agent._fix_registry._handlers
         assert "business.quota_exhaustion" in agent._fix_registry._handlers
+        assert "infra.runpod_workers" in agent._fix_registry._handlers
+        assert "resilience.runpod_consecutive_failures" in agent._fix_registry._handlers
+        assert "resilience.dashscope_consecutive_timeouts" in agent._fix_registry._handlers
         # GPU fixes removed in Phase 1 migration (RunPod Serverless)
         assert "gpu.fps_drop" not in agent._fix_registry._handlers
-        assert "gpu.heartbeat_timeout" not in agent._fix_registry._handlers
 
     @pytest.mark.asyncio
     async def test_agent_pattern_key_generation(self, agent_ctx):
@@ -1043,7 +994,7 @@ class TestAgentAPI:
         data = resp.json()
         assert "scan_count" in data
         assert data["running"] is False
-        assert data["rules_count"] == 8  # 3 GPU rules removed in Phase 1
+        assert data["rules_count"] == 39  # 30 + 5 resilience + 4 prediction rules
 
     @pytest.mark.asyncio
     async def test_get_incidents_empty(self, api_client):

@@ -446,6 +446,25 @@ async def _process_and_respond(
             details={"text_length": len(text), "response_length": len(response_text)},
         )
 
+    # Guardrails check before sending response / TTS
+    guardrails = getattr(app.state, "guardrails", None)
+    if guardrails is not None:
+        employee_guardrails = {}
+        if avatar:
+            try:
+                import json as _json
+                raw = getattr(avatar, "guardrails", "{}")
+                employee_guardrails = _json.loads(raw) if raw else {}
+            except Exception:
+                pass
+        guard_result = guardrails.check_response(response_text, employee_guardrails, language)
+        if not guard_result.approved:
+            logger.warning(
+                "Guardrail blocked response",
+                extra={"session_id": session_id, "reason": guard_result.reason},
+            )
+        response_text = guard_result.text
+
     # Send text response immediately (low latency)
     await _send(websocket, {
         "type": "text_response",
@@ -500,6 +519,18 @@ async def _process_and_respond(
             config = get_settings()
             r2 = R2Storage(config)
             runpod = RunPodServerless(config)
+
+            # Skip rendering if agent has disabled video mode due to consecutive failures
+            # Check the pipeline's shared RunPod client (the one the agent modifies)
+            pipeline_runpod = getattr(pipeline, '_runpod', None) or getattr(pipeline, '_runpod_client', None)
+            if pipeline_runpod is not None and getattr(pipeline_runpod, 'video_disabled', False) is True:
+                logger.info("Video rendering disabled by agent — sending fallback_vrm")
+                await _send(websocket, {
+                    "type": "fallback_vrm",
+                    "session_id": session_id,
+                    "reason": "Video rendering temporarily disabled due to repeated failures",
+                })
+                raise Exception("video_disabled")  # Skip to finally block
 
             # Upload audio to R2
             audio_url = r2.upload_audio(session_id, audio_bytes)

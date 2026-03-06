@@ -194,6 +194,7 @@ class TestPhase2_01_FullVoiceSession:
         app = MagicMock()
         app.state.billing = None  # No billing for this test
         app.state.db = None
+        app.state.guardrails = None
 
         asr_session_mock = AsyncMock()
         asr_session_mock.send_audio = AsyncMock()
@@ -279,6 +280,7 @@ class TestPhase2_02_VRMFallback:
         app = MagicMock()
         app.state.db = None
         app.state.agent_engine = None
+        app.state.guardrails = None
 
         pipeline = MagicMock()
         pipeline._llm.generate = AsyncMock(return_value=FakeLLMResult())
@@ -353,6 +355,7 @@ class TestPhase2_03_RunPodFailureRecovery:
         app = MagicMock()
         app.state.db = None
         app.state.agent_engine = None
+        app.state.guardrails = None
 
         pipeline = MagicMock()
         pipeline._llm.generate = AsyncMock(return_value=FakeLLMResult())

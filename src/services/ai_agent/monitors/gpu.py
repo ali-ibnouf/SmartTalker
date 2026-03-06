@@ -89,39 +89,3 @@ class NodeVRAMRule:
         return detections
 
 
-class NodeHeartbeatRule:
-    """Detects nodes that have gone silent (missed heartbeats)."""
-
-    rule_id = "gpu.heartbeat_timeout"
-
-    async def evaluate(self, ctx: AgentContext) -> list[Detection]:
-        detections: list[Detection] = []
-        nm = ctx.node_manager
-        if nm is None:
-            return detections
-
-        timeout = ctx.agent_config.heartbeat_timeout_s
-        now = time.time()
-        for node in nm.list_nodes():
-            if node.last_heartbeat == 0:
-                continue
-            elapsed = now - node.last_heartbeat
-            if elapsed > timeout:
-                detections.append(Detection(
-                    rule_id=self.rule_id,
-                    severity="critical",
-                    title=f"Heartbeat timeout: {node.hostname}",
-                    description=(
-                        f"Node {node.node_id} last heartbeat was {elapsed:.0f}s ago "
-                        f"(timeout: {timeout}s). Node may have crashed or lost network."
-                    ),
-                    details={
-                        "node_id": node.node_id,
-                        "hostname": node.hostname,
-                        "last_heartbeat_s_ago": round(elapsed),
-                        "customer_id": node.customer_id,
-                    },
-                    recommendation="Attempt reconnection or notify customer of node outage.",
-                    auto_fixable=True,
-                ))
-        return detections
