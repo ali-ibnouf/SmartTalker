@@ -268,7 +268,11 @@ class WebSocketManager:
 
         try:
             while True:
-                message = await session.websocket.receive()
+                try:
+                    message = await asyncio.wait_for(session.websocket.receive(), timeout=60.0)
+                except asyncio.TimeoutError:
+                    logger.warning("WebSocket receive timeout", extra={"session_id": session.session_id})
+                    break
 
                 if message["type"] == "websocket.disconnect":
                     break

@@ -43,6 +43,16 @@ from starlette.websockets import WebSocketState
 
 from src.utils.logger import setup_logger
 
+
+def _bg_task_error_handler(task: asyncio.Task) -> None:
+    """Log exceptions from background tasks to prevent silent failures."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _logger = setup_logger("operator_ws.bg_task")
+        _logger.error(f"Background task failed: {exc}", extra={"task": task.get_name()})
+
 logger = setup_logger("api.operator_ws")
 
 
@@ -108,7 +118,7 @@ class OperatorWebSocketManager:
     def get_customer_sessions(self) -> list[dict]:
         """Return a summary of active customer sessions."""
         sessions = []
-        for sid, session in self._customer_manager._sessions.items():
+        for sid, session in list(self._customer_manager._sessions.items()):
             sessions.append({
                 "session_id": sid,
                 "client_ip": session.client_ip,
@@ -165,7 +175,11 @@ class OperatorWebSocketManager:
                 await self._send_session_list(operator)
 
             while True:
-                message = await operator.websocket.receive()
+                try:
+                    message = await asyncio.wait_for(operator.websocket.receive(), timeout=60.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Operator WebSocket receive timeout", extra={"operator_id": operator.operator_id})
+                    break
 
                 if message["type"] == "websocket.disconnect":
                     break
@@ -287,14 +301,20 @@ class OperatorWebSocketManager:
             return
 
         session_id = operator.subscribed_session_id
-        if not session_id or session_id not in self._customer_manager._sessions:
+        if not session_id:
             await self._send_error(
                 operator.websocket,
                 "Not subscribed to an active session",
             )
             return
 
-        customer_session = self._customer_manager._sessions[session_id]
+        customer_session = self._customer_manager._sessions.get(session_id)
+        if customer_session is None:
+            await self._send_error(
+                operator.websocket,
+                "Not subscribed to an active session",
+            )
+            return
 
         # Send as operator_override to the customer
         try:
@@ -331,10 +351,8 @@ class OperatorWebSocketManager:
                             operator_id=operator.operator_id,
                             action_type="response",
                             session_id=session_id,
-                            details={
-                                "text_length": len(text),
-                                "response_time_ms": response_time_ms,
-                            },
+                            details={"text_length": len(text)},
+                            response_time_ms=response_time_ms or 0,
                         )
                     except Exception as sup_exc:
                         logger.warning(f"Failed to record supervisor action: {sup_exc}")
@@ -346,7 +364,7 @@ class OperatorWebSocketManager:
                         import asyncio
 
                         avatar = getattr(customer_session.config, "avatar", None)
-                        asyncio.create_task(synthesize_operator_message(
+                        task = asyncio.create_task(synthesize_operator_message(
                             text=text,
                             pipeline=self._pipeline,
                             avatar=avatar,
@@ -355,6 +373,7 @@ class OperatorWebSocketManager:
                             customer_ws=customer_session.websocket,
                             app=None,
                         ))
+                        task.add_done_callback(_bg_task_error_handler)
                     except Exception as voice_exc:
                         logger.debug(f"Voice synthesis skipped: {voice_exc}")
 
@@ -463,7 +482,7 @@ class OperatorWebSocketManager:
 
     async def relay_video_frame(self, session_id: str, frame_b64: str) -> None:
         """Relay a customer video frame to subscribed operators."""
-        for operator in self._operators.values():
+        for operator in list(self._operators.values()):
             if operator.subscribed_session_id == session_id and operator.authenticated:
                 try:
                     await self._send_json(operator.websocket, {
@@ -493,7 +512,7 @@ class OperatorWebSocketManager:
         if extras:
             msg.update(extras)
 
-        for operator in self._operators.values():
+        for operator in list(self._operators.values()):
             if operator.subscribed_session_id == session_id and operator.authenticated:
                 try:
                     await self._send_json(operator.websocket, msg)
@@ -530,7 +549,7 @@ class OperatorWebSocketManager:
             "timestamp": now,
         }
 
-        for operator in self._operators.values():
+        for operator in list(self._operators.values()):
             if operator.authenticated:
                 # Send to all authenticated operators (not just subscribed)
                 try:
@@ -580,7 +599,7 @@ class OperatorWebSocketManager:
         )
 
         # Relay to subscribed operators
-        for operator in self._operators.values():
+        for operator in list(self._operators.values()):
             if operator.subscribed_session_id == session_id and operator.authenticated:
                 try:
                     await self._send_json(operator.websocket, {
@@ -598,7 +617,7 @@ class OperatorWebSocketManager:
 
     async def notify_session_ended(self, session_id: str) -> None:
         """Notify operators that a customer session has ended."""
-        for operator in self._operators.values():
+        for operator in list(self._operators.values()):
             if operator.subscribed_session_id == session_id and operator.authenticated:
                 try:
                     await self._send_json(operator.websocket, {

@@ -220,6 +220,18 @@ class Settings(BaseSettings):
     billing_rate_per_second: float = Field(default=0.002, description="Cost per second per session (USD)")
     billing_grace_period_s: int = Field(default=5, description="Grace period in seconds before billing starts")
 
+    # ── Paddle (Billing gateway) ─────────────────────────────────────────
+    paddle_api_key: Optional[str] = Field(default=None, description="Paddle server-side API key")
+    paddle_client_token: Optional[str] = Field(default=None, description="Paddle.js client token")
+    paddle_webhook_secret: Optional[str] = Field(default=None, description="Paddle webhook HMAC secret")
+    paddle_environment: str = Field(default="sandbox", description="Paddle environment (sandbox/production)")
+
+    # ── Email (Resend) ────────────────────────────────────────────────────
+    resend_api_key: Optional[str] = Field(default=None, description="Resend API key for transactional emails")
+
+    # ── JWT ───────────────────────────────────────────────────────────────
+    jwt_secret: Optional[str] = Field(default=None, description="JWT signing secret")
+
     # ── WhatsApp (Meta Business API) ─────────────────────────────────────
     whatsapp_verify_token: Optional[str] = Field(default=None, description="Webhook verify token")
     whatsapp_access_token: Optional[str] = Field(default=None, description="Graph API access token")
@@ -227,6 +239,11 @@ class Settings(BaseSettings):
     whatsapp_app_secret: Optional[str] = Field(default=None, description="App secret for signature verification")
     whatsapp_api_version: str = Field(default="v18.0", description="Graph API version")
     whatsapp_webhook_url: Optional[str] = Field(default=None, description="Public webhook URL")
+
+    # ── Telegram (Bot API) ──────────────────────────────────────────────
+    telegram_bot_token: Optional[str] = Field(default=None, description="Telegram Bot token from BotFather")
+    telegram_bot_username: Optional[str] = Field(default=None, description="Telegram bot username")
+    telegram_webhook_url: Optional[str] = Field(default=None, description="Public webhook URL for Telegram")
 
     # ── WebRTC ───────────────────────────────────────────────────────────
     webrtc_enabled: bool = Field(default=False, description="Enable WebRTC signaling endpoint")
@@ -287,6 +304,25 @@ class Settings(BaseSettings):
                     "WHATSAPP_APP_SECRET must be set when WHATSAPP_ACCESS_TOKEN is configured. "
                     "This is required for webhook signature verification."
                 )
+            # Enforce critical service credentials in production
+            required_in_prod = {
+                "dashscope_api_key": "DASHSCOPE_API_KEY",
+                "database_url": "DATABASE_URL",
+                "runpod_api_key": "RUNPOD_API_KEY",
+                "r2_account_id": "R2_ACCOUNT_ID",
+                "r2_access_key_id": "R2_ACCESS_KEY_ID",
+                "r2_secret_access_key": "R2_SECRET_ACCESS_KEY",
+                "r2_bucket": "R2_BUCKET",
+                "admin_api_key": "ADMIN_API_KEY",
+                "jwt_secret": "JWT_SECRET",
+            }
+            for field_name, env_name in required_in_prod.items():
+                val = getattr(self, field_name, "")
+                if not val:
+                    raise ValueError(
+                        f"{env_name} must be set when APP_ENV=production. "
+                        f"This service cannot operate without it."
+                    )
         return self
 
     @property

@@ -78,7 +78,7 @@ class FixRegistry:
                 f"Auto-fix failed: {handler.fix_id}: {exc}",
                 extra={"rule_id": detection.rule_id},
             )
-            return {"error": str(exc), "fix_id": handler.fix_id}
+            return {"action": "error", "error": str(exc), "fix_id": handler.fix_id}
 
 
 # ── Concrete Handlers ─────────────────────────────────────────────────────
@@ -196,14 +196,17 @@ class MemoryCleanupFix:
                 except Exception:
                     pass
 
-        # Close idle WS sessions older than threshold
+        # Close idle WS sessions older than threshold (capped)
         closed_sessions = 0
+        max_close = getattr(ctx.agent_config, "safety_max_session_close_per_cycle", 5)
         if ctx.operator_manager is not None:
             try:
                 timeout_min = ctx.agent_config.stale_session_timeout_min
                 sessions = getattr(ctx.operator_manager, "get_active_sessions", lambda: [])()
                 now = time.time()
                 for s in sessions:
+                    if closed_sessions >= max_close:
+                        break
                     last_activity = getattr(s, "last_activity", now)
                     if isinstance(last_activity, (int, float)) and (now - last_activity) > timeout_min * 60:
                         close_fn = getattr(ctx.operator_manager, "close_session", None)
@@ -232,17 +235,24 @@ class DBConnectionFix:
         if ctx.db is None:
             return {"action": "skip", "reason": "no database"}
 
+        max_kill = getattr(ctx.agent_config, "safety_db_kill_max", 5)
+
         try:
             from sqlalchemy import text
 
             async with ctx.db.session_ctx() as session:
-                # Kill idle connections older than 5 minutes (not our own)
+                # Kill idle connections older than 5 minutes, excluding:
+                # - Our own connection (pg_backend_pid())
+                # - System/replication processes (backend_type filtering)
+                # Limited to max_kill to prevent mass termination
                 result = await session.execute(text(
                     "SELECT pg_terminate_backend(pid) "
                     "FROM pg_stat_activity "
                     "WHERE state = 'idle' "
                     "AND query_start < now() - interval '300 seconds' "
-                    "AND pid <> pg_backend_pid()"
+                    "AND pid <> pg_backend_pid() "
+                    "AND backend_type = 'client backend' "
+                    f"LIMIT {int(max_kill)}"
                 ))
                 killed = sum(1 for row in result if row[0])
 
@@ -258,6 +268,7 @@ class DBConnectionFix:
             return {
                 "action": "db_connection_cleanup",
                 "connections_killed": killed,
+                "max_kill_limit": max_kill,
             }
         except Exception as exc:
             return {"action": "error", "error": str(exc)}
@@ -276,8 +287,13 @@ class StaleSessionFix:
         return False  # Only called via scheduled loop, not rule-based
 
     async def apply_scheduled(self, ctx: AgentContext) -> dict[str, Any]:
-        """Scheduled cleanup — not triggered by a Detection."""
+        """Scheduled cleanup — not triggered by a Detection.
+
+        Respects safety_max_session_close_per_cycle to prevent mass disconnection.
+        """
         closed = 0
+        max_close = getattr(ctx.agent_config, "safety_max_session_close_per_cycle", 5)
+
         if ctx.operator_manager is None:
             return {"action": "skip", "reason": "no operator_manager"}
 
@@ -287,6 +303,12 @@ class StaleSessionFix:
             now = time.time()
 
             for s in sessions:
+                if closed >= max_close:
+                    logger.info(
+                        f"Stale session cleanup capped at {max_close} — "
+                        f"remaining stale sessions deferred to next cycle"
+                    )
+                    break
                 last_activity = getattr(s, "last_activity", now)
                 if isinstance(last_activity, (int, float)) and (now - last_activity) > timeout_min * 60:
                     close_fn = getattr(ctx.operator_manager, "close_session", None)
@@ -299,7 +321,7 @@ class StaleSessionFix:
         if closed:
             logger.info(f"Stale session cleanup: closed {closed} sessions")
 
-        return {"action": "stale_session_cleanup", "sessions_closed": closed}
+        return {"action": "stale_session_cleanup", "sessions_closed": closed, "max_per_cycle": max_close}
 
 
 class QuotaGraceFix:
@@ -323,6 +345,9 @@ class QuotaGraceFix:
             return {"action": "skip", "reason": "no database"}
 
         customer_id = detection.details.get("customer_id", "")
+        if not customer_id:
+            return {"action": "error", "error": "missing customer_id in detection details"}
+
         grace_hours = ctx.agent_config.quota_grace_hours
 
         try:
@@ -342,6 +367,7 @@ class QuotaGraceFix:
                     )
                     .values(grace_period_until=grace_until)
                 )
+                await session.commit()
 
             logger.info(
                 f"Quota grace period set for customer {customer_id}",
@@ -374,7 +400,9 @@ class RateLimitThrottleFix:
         if ctx.redis is None:
             return {"action": "skip", "reason": "no redis"}
 
-        customer_id = detection.details["customer_id"]
+        customer_id = detection.details.get("customer_id", "")
+        if not customer_id:
+            return {"action": "error", "error": "missing customer_id in detection details"}
         ttl = ctx.agent_config.throttle_duration_s
         limit = ctx.agent_config.throttle_rate_limit
 
@@ -441,7 +469,7 @@ class WarmupJobFix:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                job_id = data.get("id", "")
+                job_id = data.get("id", "") if isinstance(data, dict) else ""
 
             self._last_applied = time.time()
             logger.info(
@@ -567,4 +595,142 @@ class RedisMemoryFix:
         return {
             "action": "redis_memory_cleanup",
             "keys_cleared": cleared,
+        }
+
+
+# ── Channel Integration Fixes ────────────────────────────────────────────────
+
+
+class TelegramWebhookReregisterFix:
+    """Re-registers Telegram webhook when delivery failures are detected.
+
+    When the AI Agent detects webhook failures for a Telegram channel,
+    this fix re-registers the webhook URL with the Telegram Bot API.
+    """
+
+    fix_id = "fix.telegram_webhook_reregister"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return (
+            detection.rule_id == "channels.webhook_failures"
+            and detection.details.get("channel_type") == "telegram"
+            and ctx.db is not None
+        )
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        if ctx.db is None:
+            return {"action": "skip", "reason": "no database"}
+
+        employee_id = detection.details.get("employee_id", "")
+        if not employee_id:
+            return {"action": "error", "error": "missing employee_id in detection details"}
+
+        try:
+            from sqlalchemy import select
+            from src.db.models import EmployeeChannel
+
+            async with ctx.db.session_ctx() as session:
+                stmt = select(EmployeeChannel).where(
+                    EmployeeChannel.employee_id == employee_id,
+                    EmployeeChannel.channel_type == "telegram",
+                    EmployeeChannel.enabled == True,  # noqa: E712
+                )
+                result = await session.execute(stmt)
+                channel = result.scalar()
+
+            if channel is None or not channel.tg_bot_token:
+                return {"action": "skip", "reason": "no telegram config"}
+
+            from src.channels.telegram import TelegramAdapter
+
+            # Use config webhook URL if available, else default
+            if ctx.config and getattr(ctx.config, "telegram_webhook_url", None):
+                base = ctx.config.telegram_webhook_url.rstrip("/")
+                webhook_url = f"{base}/{employee_id}" if not base.endswith(employee_id) else base
+            else:
+                webhook_url = f"https://api.maskki.com/webhooks/telegram/{employee_id}"
+
+            tg_result = await TelegramAdapter.register_webhook(
+                channel.tg_bot_token, webhook_url
+            )
+
+            # Clear failure counter (key includes hour suffix from _record_metric)
+            if ctx.redis is not None:
+                # Scan and delete all matching keys for this employee
+                cursor = b"0"
+                while True:
+                    cursor, keys = await ctx.redis.scan(
+                        cursor=cursor,
+                        match=f"channel_fail:telegram:{employee_id}:*",
+                        count=100,
+                    )
+                    if keys:
+                        await ctx.redis.delete(*keys)
+                    if cursor == b"0" or cursor == 0:
+                        break
+
+            telegram_ok = tg_result.get("ok", False) if isinstance(tg_result, dict) else False
+            logger.info(
+                f"Telegram webhook re-registered for {employee_id}",
+                extra={"ok": telegram_ok},
+            )
+
+            return {
+                "action": "telegram_webhook_reregistered",
+                "employee_id": employee_id,
+                "webhook_url": webhook_url,
+                "telegram_ok": telegram_ok,
+            }
+        except Exception as exc:
+            return {"action": "error", "error": str(exc)}
+
+
+class ChannelRoutingFallbackFix:
+    """Clears routing error counters and logs an alert.
+
+    When a channel's routing error rate is too high, this fix:
+    1. Clears the error counter to prevent stale alerts
+    2. Logs a notification for the operator to investigate
+
+    The actual fallback (routing to widget) is handled by ChannelRouter itself.
+    """
+
+    fix_id = "fix.channel_routing_fallback"
+
+    async def can_fix(self, detection: Detection, ctx: AgentContext) -> bool:
+        return (
+            detection.rule_id == "channels.routing_errors"
+            and ctx.redis is not None
+        )
+
+    async def apply(self, detection: Detection, ctx: AgentContext) -> dict[str, Any]:
+        if ctx.redis is None:
+            return {"action": "skip", "reason": "no redis"}
+
+        ch_type = detection.details.get("channel_type", "")
+        if not ch_type:
+            return {"action": "error", "error": "missing channel_type in detection details"}
+        error_rate = detection.details.get("error_rate_pct", 0)
+
+        # If error rate is extreme (>80%), escalate — do NOT auto-disable
+        # channels across all customers. Mass-disabling is a destructive
+        # action that requires manual approval.
+        if error_rate > 80:
+            logger.warning(
+                f"Channel {ch_type} has {error_rate:.0f}% error rate — escalating for manual review"
+            )
+            return {
+                "action": "routing_alert_escalated",
+                "channel_type": ch_type,
+                "error_rate_pct": error_rate,
+                "reason": (
+                    "Error rate exceeded 80%. Channel disable requires "
+                    "manual approval to avoid cross-customer impact."
+                ),
+            }
+
+        return {
+            "action": "routing_alert_logged",
+            "channel_type": ch_type,
+            "error_rate_pct": error_rate,
         }

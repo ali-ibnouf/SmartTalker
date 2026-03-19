@@ -299,3 +299,19 @@ class AgentError(SmartTalkerError):
         original_exception: Optional[Exception] = None,
     ) -> None:
         super().__init__(message=message, detail=detail, original_exception=original_exception)
+
+
+class ServicePausedError(SmartTalkerError):
+    """Raised when a service or customer is paused by Cost Guardian.
+
+    Raised when: platform emergency pause is active, customer is paused
+    due to cost overrun, or a specific service is temporarily stopped.
+    """
+
+    def __init__(
+        self,
+        message: str = "Service temporarily paused for cost protection",
+        detail: Optional[Any] = None,
+        original_exception: Optional[Exception] = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail, original_exception=original_exception)

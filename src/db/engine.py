@@ -6,6 +6,7 @@ and provides session factories for use in application code.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -75,6 +76,7 @@ class Database:
         """Create a new async session (use as context manager)."""
         return self._session_factory()
 
+    @asynccontextmanager
     async def session_ctx(self) -> AsyncGenerator[AsyncSession, None]:
         """Async generator that yields a session and handles commit/rollback."""
         async with self._session_factory() as session:

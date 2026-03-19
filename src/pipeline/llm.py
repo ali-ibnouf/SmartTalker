@@ -256,16 +256,18 @@ class LLMEngine:
             session.last_access = now
             return session
 
-    def clear_session(self, session_id: str) -> None:
+    async def clear_session(self, session_id: str) -> None:
         """Clear conversation history for a specific session."""
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            logger.info("Session cleared", extra={"session_id": session_id})
+        async with self._session_lock:
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+                logger.info("Session cleared", extra={"session_id": session_id})
 
-    def clear_history(self) -> None:
+    async def clear_history(self) -> None:
         """Clear all session histories."""
-        self._sessions.clear()
-        logger.info("All conversation histories cleared")
+        async with self._session_lock:
+            self._sessions.clear()
+            logger.info("All conversation histories cleared")
 
     @property
     def session_count(self) -> int:
@@ -411,9 +413,12 @@ class LLMEngine:
                     if response.status_code == 429:
                         self._rate_limit_429_count += 1
                         if attempt < _max_attempts - 1:
-                            retry_after = float(
-                                response.headers.get("Retry-After", _backoff[attempt])
-                            )
+                            try:
+                                retry_after = float(
+                                    response.headers.get("Retry-After", _backoff[attempt])
+                                )
+                            except (ValueError, TypeError):
+                                retry_after = _backoff[attempt]
                             logger.warning(
                                 "DashScope rate limited (429), retrying",
                                 extra={"attempt": attempt + 1, "retry_after": retry_after},

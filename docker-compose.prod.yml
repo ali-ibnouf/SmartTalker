@@ -1,38 +1,45 @@
 # =============================================================================
-# SmartTalker — Production Docker Compose
+# SmartTalker — Production Docker Compose (Standalone)
 # Phase 1: DashScope cloud APIs + RunPod Serverless + Cloudflare R2
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 # =============================================================================
 
 services:
-  # ── Core: production overrides ────────────────────────────────────
-  core:
-    ports: !reset []
+  # ── Central: FastAPI application ─────────────────────────────────────────
+  central:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smarttalker-central
+    restart: always
     environment:
       # General
       - APP_ENV=production
       - DEBUG=false
       - LOG_LEVEL=INFO
+      - TESTING=0
       # API
-      - API_KEY=${API_KEY:?API_KEY must be set for production}
-      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://admin.yourdomain.com,https://app.yourdomain.com}
+      - API_KEY=${API_KEY:?API_KEY must be set}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:?ADMIN_API_KEY must be set}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://maskki.com,https://app.maskki.com,https://admin.maskki.com}
       - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-60}
       # Database
-      - DATABASE_URL=postgresql+asyncpg://smarttalker:${POSTGRES_PASSWORD}@postgres:5432/smarttalker
-      # Redis (with password)
+      - DATABASE_URL=postgresql+asyncpg://smarttalker:${DB_PASSWORD}@postgres:5432/smarttalker
+      # Redis
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      # DashScope (LLM + ASR + TTS shared key)
+      # DashScope (LLM + ASR + TTS)
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY must be set}
-      - DASHSCOPE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-      - DASHSCOPE_WS_URL=wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime
-      - LLM_MODEL_NAME=qwen3-max
-      - LLM_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - DASHSCOPE_WS_URL=${DASHSCOPE_WS_URL:-wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime}
+      - LLM_MODEL_NAME=${LLM_MODEL:-qwen3-max}
+      - LLM_BASE_URL=${DASHSCOPE_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
       - LLM_API_KEY=${DASHSCOPE_API_KEY}
+      - ASR_MODEL=${ASR_MODEL:-qwen3-asr-flash-realtime}
+      - TTS_MODEL=${TTS_MODEL:-qwen3-tts-vc-realtime}
       # RunPod Serverless
       - RUNPOD_API_KEY=${RUNPOD_API_KEY:?RUNPOD_API_KEY must be set}
       - RUNPOD_ENDPOINT_MUSETALK=${RUNPOD_ENDPOINT_MUSETALK:?RUNPOD_ENDPOINT_MUSETALK must be set}
-      - RUNPOD_ENDPOINT_PREPROCESS=${RUNPOD_ENDPOINT_PREPROCESS:?RUNPOD_ENDPOINT_PREPROCESS must be set}
+      - RUNPOD_ENDPOINT_PREPROCESS=${RUNPOD_ENDPOINT_PREPROCESS:-${RUNPOD_ENDPOINT_MUSETALK}}
       # Cloudflare R2
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:?R2_ACCOUNT_ID must be set}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID must be set}
@@ -40,127 +47,203 @@ services:
       - R2_BUCKET=${R2_BUCKET:-maskki-media}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL:?R2_PUBLIC_URL must be set}
       # Knowledge Base
-      - KB_EMBEDDING_API_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+      - KB_EMBEDDING_API_URL=${DASHSCOPE_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
       - KB_EMBEDDING_API_KEY=${DASHSCOPE_API_KEY}
-      # AI Agent
-      - AGENT_AGENT_ENABLED=true
+      # Billing
+      - BILLING_ENABLED=true
+      - BILLING_RATE_PER_SECOND=${BILLING_RATE_PER_SECOND:-0.002}
+      # AI Agent (in-process)
+      - AGENT_ENABLED=true
       - AGENT_AUTO_FIX_ENABLED=true
       - AGENT_SCAN_INTERVAL_S=60
       - AGENT_AUDIT_LOG_PATH=/app/logs/agent_audit.jsonl
       - AGENT_NOTIFICATION_EMAIL_ENABLED=${AGENT_NOTIFICATION_EMAIL_ENABLED:-true}
-      - AGENT_NOTIFICATION_EMAIL_TO=${AGENT_NOTIFICATION_EMAIL_TO:-contact@lsmarttech.com}
+      - AGENT_NOTIFICATION_EMAIL_TO=${AGENT_NOTIFICATION_EMAIL_TO:-contact@maskki.com}
       # SMTP
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
-      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-agent@yourdomain.com}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-agent@maskki.com}
+      # Paddle
+      - PADDLE_API_KEY=${PADDLE_API_KEY:-}
+      - PADDLE_CLIENT_TOKEN=${PADDLE_CLIENT_TOKEN:-}
+      - PADDLE_WEBHOOK_SECRET=${PADDLE_WEBHOOK_SECRET:-}
+      # Resend
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - central-logs:/app/logs
+      - central-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    networks:
+      - smarttalker-net
 
-  # ── AI Optimization Agent (standalone) ────────────────────────────
+  # ── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: smarttalker-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: smarttalker
+      POSTGRES_USER: smarttalker
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    command: >
+      postgres
+      -c ssl=off
+      -c listen_addresses='*'
+      -c max_connections=100
+      -c log_connections=on
+      -c log_disconnections=on
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U smarttalker" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smarttalker-net
+    # No host port exposure — only reachable via internal network
+
+    # ── Redis ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: smarttalker-redis
+    restart: always
+    command: >-
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      --rename-command FLUSHDB ""
+      --rename-command FLUSHALL ""
+      --rename-command CONFIG ""
+      --rename-command DEBUG ""
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smarttalker-net
+    # No host port exposure
+
+    # ── AI Optimization Agent (standalone process) ──────────────────────────
   ai-agent:
     build:
       context: .
       dockerfile: Dockerfile.agent
     container_name: smarttalker-ai-agent
     restart: always
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
-      - DATABASE_URL=postgresql+asyncpg://smarttalker:${POSTGRES_PASSWORD}@postgres:5432/smarttalker
+      - DATABASE_URL=postgresql+asyncpg://smarttalker:${DB_PASSWORD}@postgres:5432/smarttalker
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ADMIN_API_KEY=${ADMIN_API_KEY}
-      - ALERT_EMAIL=contact@lsmarttech.com
-      # DashScope (health checks + LLM calls)
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
-      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL}
-      - LLM_MODEL=${LLM_MODEL}
-      # RunPod (endpoint monitoring)
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - LLM_MODEL=${LLM_MODEL:-qwen3-max}
       - RUNPOD_API_KEY=${RUNPOD_API_KEY}
       - RUNPOD_ENDPOINT_MUSETALK=${RUNPOD_ENDPOINT_MUSETALK}
-      - RUNPOD_ENDPOINT_PREPROCESS=${RUNPOD_ENDPOINT_PREPROCESS}
-      # R2 (connectivity checks)
       - R2_ENDPOINT_URL=${R2_ENDPOINT_URL}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET=${R2_BUCKET:-maskki-media}
-      # Agent config
-      - AGENT_AGENT_ENABLED=true
+      - AGENT_ENABLED=true
       - AGENT_AUTO_FIX_ENABLED=true
       - AGENT_SCAN_INTERVAL_S=60
       - AGENT_AUDIT_LOG_PATH=/app/logs/agent_audit.jsonl
       - AGENT_NOTIFICATION_EMAIL_ENABLED=${AGENT_NOTIFICATION_EMAIL_ENABLED:-true}
-      - AGENT_NOTIFICATION_EMAIL_TO=${AGENT_NOTIFICATION_EMAIL_TO:-contact@lsmarttech.com}
-      # SMTP (for email alerts)
+      - AGENT_NOTIFICATION_EMAIL_TO=${AGENT_NOTIFICATION_EMAIL_TO:-contact@maskki.com}
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
-      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-agent@lsmarttech.com}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-agent@maskki.com}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - ./logs/agent:/app/logs
+      - agent-logs:/app/logs
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     networks:
       - smarttalker-net
 
-  # ── Nginx: Reverse proxy + SSL termination ────────────────────────
+  # ── Nginx: SSL termination + reverse proxy ──────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: smarttalker-nginx
-    restart: unless-stopped
+    restart: always
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - ./outputs:/app/files:ro
-      - ./clips:/app/clips:ro
+      - certbot-webroot:/var/www/certbot:ro
     depends_on:
-      - core
+      - central
     networks:
       - smarttalker-net
 
-  # ── PostgreSQL: production overrides ────────────────────────────────
-  postgres:
-    ports: !reset []
-    # No host port exposure in production — only reachable via internal network
+# =============================================================================
+# Volumes & Networks
+# =============================================================================
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  central-logs:
+    driver: local
+  central-data:
+    driver: local
+  agent-logs:
+    driver: local
+  certbot-webroot:
+    driver: local
 
-    # ── Alertmanager ──────────────────────────────────────────────────
-  alertmanager:
-    image: prom/alertmanager:v0.27.0
-    container_name: smarttalker-alertmanager
-    restart: unless-stopped
-    # No host port — access via internal network only
-    volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-    networks:
-      - smarttalker-net
-
-  # ── Redis Exporter ────────────────────────────────────────────────
-  redis-exporter:
-    image: oliver006/redis_exporter:latest
-    container_name: smarttalker-redis-exporter
-    restart: unless-stopped
-    environment:
-      - REDIS_ADDR=redis://:${REDIS_PASSWORD}@redis:6379
-    depends_on:
-      - redis
-    networks:
-      - smarttalker-net
+networks:
+  smarttalker-net:
+    driver: bridge

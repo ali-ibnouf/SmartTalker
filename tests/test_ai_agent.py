@@ -994,7 +994,7 @@ class TestAgentAPI:
         data = resp.json()
         assert "scan_count" in data
         assert data["running"] is False
-        assert data["rules_count"] == 39  # 30 + 5 resilience + 4 prediction rules
+        assert data["rules_count"] == 44  # 30 + 5 resilience + 4 prediction + 5 channel rules
 
     @pytest.mark.asyncio
     async def test_get_incidents_empty(self, api_client):
@@ -1025,20 +1025,20 @@ class TestAgentAPI:
         assert "count" in data
 
     @pytest.mark.asyncio
-    async def test_acknowledge_incident(self, api_client):
+    async def test_acknowledge_nonexistent_incident(self, api_client):
+        """Acknowledging a non-existent incident returns 404."""
         resp = await api_client.post("/api/v1/agent/incidents/test-id/acknowledge")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
-        assert data["incident_id"] == "test-id"
-        assert data["status"] == "acknowledged"
+        assert "error" in data
 
     @pytest.mark.asyncio
-    async def test_resolve_incident(self, api_client):
+    async def test_resolve_nonexistent_incident(self, api_client):
+        """Resolving a non-existent incident returns 404."""
         resp = await api_client.post("/api/v1/agent/incidents/test-id/resolve")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
-        assert data["incident_id"] == "test-id"
-        assert data["status"] == "resolved"
+        assert "error" in data
 
     @pytest.mark.asyncio
     async def test_stats_no_agent(self):

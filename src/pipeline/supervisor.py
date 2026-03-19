@@ -165,7 +165,7 @@ class SupervisorEngine:
         if self._db is not None:
             from src.db.models import OperatorAction
 
-            async with self._db.session() as session:
+            async with self._db.session_ctx() as session:
                 session.add(OperatorAction(
                     id=action_id,
                     operator_id=operator_id,
@@ -176,7 +176,6 @@ class SupervisorEngine:
                     response_time_ms=response_time_ms,
                     created_at=datetime.now(timezone.utc),
                 ))
-                await session.commit()
         else:
             conn = self._sqlite_conn
             assert conn is not None
@@ -375,7 +374,7 @@ class SupervisorEngine:
         if self._db is not None:
             from src.db.models import DecisionReview
 
-            async with self._db.session() as session:
+            async with self._db.session_ctx() as session:
                 session.add(DecisionReview(
                     id=review_id,
                     session_id=session_id,
@@ -386,7 +385,6 @@ class SupervisorEngine:
                     flagged_reason=reason,
                     created_at=datetime.now(timezone.utc),
                 ))
-                await session.commit()
         else:
             conn = self._sqlite_conn
             assert conn is not None
@@ -477,7 +475,7 @@ class SupervisorEngine:
             from sqlalchemy import select
             from src.db.models import DecisionReview
 
-            async with self._db.session() as session:
+            async with self._db.session_ctx() as session:
                 result = await session.execute(
                     select(DecisionReview).where(DecisionReview.id == review_id)
                 )
@@ -490,7 +488,6 @@ class SupervisorEngine:
                 row.review_verdict = verdict
                 row.corrected_response = corrected_response
                 row.reviewed_at = datetime.now(timezone.utc)
-                await session.commit()
 
                 return DecisionReviewItem(
                     id=row.id, session_id=row.session_id, avatar_id=row.avatar_id,

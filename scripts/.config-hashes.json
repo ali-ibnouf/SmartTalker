@@ -1,0 +1,11 @@
+{
+  "nginx.prod.conf": "2dabc91c8ca84d9b7fdfbebb32f80517369e8fff4ae4247aa4a0e15687e66b15",
+  "docker-compose.prod.yml": "ee1f2394652c24d94b3e2762513df9c31a6ebc29c0f5affb8e96c23e95fa69d4",
+  "scripts/harden-server.sh": "fd95386cf33de9d6ac2e54bfc44f28cd264fe5e43c11ef5435ba5e242b96c3b6",
+  "scripts/deploy.sh": "1e7c0a4b94f6435d5fc2ebed688272633c5228c8c14031727ebe2e6f471acbee",
+  ".env.production.example": "b996bc4bd3779c46cd9da7646392eb0ef368576e5c1a3e620a3e8f8c9d04a829",
+  "scripts/install-hooks.sh": "5364fe1c311266f4e369e46c277382a82f6fffb58b9250e07035c11968f4aefe",
+  "scripts/verify-security.sh": "9f99ffa37ac05579679ba46a56dfd676e67d100309e01e0e4bfa7bd9da5c7370",
+  "scripts/verify-cloudflare-waf.sh": "0e69e4e6529b124a46e9376832a4bb520b5daf18039f6520d75f087f44fb131a",
+  "Dockerfile": "0ba19815f1445636fbe7e5a1a6a0b0144be53f4e2b29add7c2f769af0376d78d"
+}

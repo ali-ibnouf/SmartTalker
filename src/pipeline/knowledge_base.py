@@ -133,17 +133,10 @@ class KnowledgeBaseEngine:
                 original_exception=exc,
             ) from exc
 
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """Free resources."""
         if self._http_client is not None:
-            # Schedule close if possible; sync fallback
-            try:
-                import asyncio
-
-                loop = asyncio.get_running_loop()
-                loop.create_task(self._http_client.aclose())
-            except RuntimeError:
-                pass
+            await self._http_client.aclose()
             self._http_client = None
 
         self._collection = None
@@ -434,6 +427,11 @@ class KnowledgeBaseEngine:
             )
             response.raise_for_status()
             data = response.json()
+            if not isinstance(data, dict) or not data.get("data") or len(data["data"]) == 0:
+                raise KnowledgeBaseError(
+                    message="Empty embedding response from API",
+                    detail=f"Expected non-empty 'data' array, got: {type(data).__name__}",
+                )
             return data["data"][0]["embedding"]
         except httpx.ConnectError as exc:
             raise KnowledgeBaseError(

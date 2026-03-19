@@ -1,6 +1,7 @@
 """End-to-end integration tests for SmartTalker."""
 
 import importlib
+import os
 
 import pytest
 
@@ -15,50 +16,58 @@ from src.main import app
 
 @pytest.fixture
 def client():
-    # Mock external services before app startup
-    with patch("src.main.SmartTalkerPipeline") as MockPipeline, \
-         patch("src.main.WhatsAppClient") as MockWhatsApp, \
-         patch("src.main.StorageManager"), \
-         patch("src.main.Database") as MockDB, \
-         patch("src.main.BillingEngine") as MockBilling, \
-         patch("src.main.PersonaEngine") as MockPersona, \
-         patch("redis.asyncio.from_url") as MockRedis:
+    # Temporarily unset TESTING so the patched lifespan runs normally
+    # (conftest.py sets TESTING=1 globally to skip real connections,
+    # but this fixture patches all service classes explicitly)
+    testing_was_set = os.environ.pop("TESTING", None)
+    try:
+        # Mock external services before app startup
+        with patch("src.main.SmartTalkerPipeline") as MockPipeline, \
+             patch("src.main.WhatsAppClient") as MockWhatsApp, \
+             patch("src.main.StorageManager"), \
+             patch("src.main.Database") as MockDB, \
+             patch("src.main.BillingEngine") as MockBilling, \
+             patch("src.main.PersonaEngine") as MockPersona, \
+             patch("redis.asyncio.from_url") as MockRedis:
 
-        # Setup mocks — return values must match Pydantic schema fields
-        mock_pipeline = MockPipeline.return_value
-        mock_pipeline.load_all.return_value = None
-        mock_pipeline.health_check = AsyncMock(return_value={
-            "status": "healthy",
-            "models_loaded": {},
-            "uptime_s": 0.0,
-        })
-        mock_pipeline.unload_all = AsyncMock()
-        mock_pipeline._training = None  # No training engine in e2e mock
-        mock_pipeline._guardrails = None  # No guardrails engine in e2e mock
+            # Setup mocks — return values must match Pydantic schema fields
+            mock_pipeline = MockPipeline.return_value
+            mock_pipeline.load_all.return_value = None
+            mock_pipeline.health_check = AsyncMock(return_value={
+                "status": "healthy",
+                "models_loaded": {},
+                "uptime_s": 0.0,
+            })
+            mock_pipeline.unload_all = AsyncMock()
+            mock_pipeline._training = None  # No training engine in e2e mock
+            mock_pipeline._guardrails = None  # No guardrails engine in e2e mock
 
-        mock_whatsapp = MockWhatsApp.return_value
-        mock_whatsapp.close = AsyncMock()
-        mock_whatsapp.verify_webhook.return_value = None
+            mock_whatsapp = MockWhatsApp.return_value
+            mock_whatsapp.close = AsyncMock()
+            mock_whatsapp.verify_webhook.return_value = None
 
-        mock_db = MockDB.return_value
-        mock_db.connect = AsyncMock()
-        mock_db.disconnect = AsyncMock()
+            mock_db = MockDB.return_value
+            mock_db.connect = AsyncMock()
+            mock_db.disconnect = AsyncMock()
 
-        mock_billing = MockBilling.return_value
-        mock_billing.load = AsyncMock()
-        mock_billing.unload = AsyncMock()
+            mock_billing = MockBilling.return_value
+            mock_billing.load = AsyncMock()
+            mock_billing.unload = AsyncMock()
 
-        mock_persona = MockPersona.return_value
-        mock_persona.load = AsyncMock()
-        mock_persona.unload = AsyncMock()
+            mock_persona = MockPersona.return_value
+            mock_persona.load = AsyncMock()
+            mock_persona.unload = AsyncMock()
 
-        mock_redis_client = MockRedis.return_value
-        mock_redis_client.ping = AsyncMock(return_value=True)
-        mock_redis_client.close = AsyncMock()
+            mock_redis_client = MockRedis.return_value
+            mock_redis_client.ping = AsyncMock(return_value=True)
+            mock_redis_client.close = AsyncMock()
 
-        # Create TestClient which triggers lifespan
-        with TestClient(app) as test_client:
-            yield test_client
+            # Create TestClient which triggers lifespan
+            with TestClient(app) as test_client:
+                yield test_client
+    finally:
+        if testing_was_set is not None:
+            os.environ["TESTING"] = testing_was_set
 
 
 def test_health_check(client):
@@ -728,8 +737,8 @@ class TestAdminJourney:
         mock_config.runpod_endpoint_musetalk = ""
         mock_config.runpod_endpoint_preprocess = ""
         mock_config.runpod_api_key = ""
-        mock_config.r2_bucket_name = ""
-        mock_config.r2_endpoint_url = ""
+        mock_config.r2_bucket = ""
+        mock_config.r2_account_id = ""
         mock_config.r2_access_key_id = ""
         mock_config.r2_secret_access_key = ""
 

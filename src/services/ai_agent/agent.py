@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from src.services.ai_agent.config import AgentSettings
 from src.services.ai_agent.fixes.handlers import (
+    ChannelRoutingFallbackFix,
     DBConnectionFix,
     FixRegistry,
     MemoryCleanupFix,
@@ -22,6 +23,7 @@ from src.services.ai_agent.fixes.handlers import (
     RateLimitThrottleFix,
     RedisMemoryFix,
     StaleSessionFix,
+    TelegramWebhookReregisterFix,
     TextOnlyModeFix,
     VideoDisableFix,
     WarmupJobFix,
@@ -64,6 +66,13 @@ from src.services.ai_agent.monitors.predictions import (
     RunPodCostProjectionRule,
     VRMVideoRatioRule,
 )
+from src.services.ai_agent.monitors.channels import (
+    ChannelDisconnectedRule,
+    ChannelRoutingErrorRule,
+    InactiveChannelRule,
+    VisitorResolutionFailureRule,
+    WebhookDeliveryFailureRule,
+)
 from src.services.ai_agent.monitors.security import (
     APIUsageSpikeRule,
     FailedAuthRule,
@@ -79,6 +88,7 @@ from src.services.ai_agent.approval import ApprovalQueue
 from src.services.ai_agent.notifications import NotificationDispatcher, NotificationSettings
 from src.services.ai_agent.prevention import PatternTracker
 from src.services.ai_agent.rules import AgentContext, Detection, RuleRegistry
+from src.services.ai_agent.safety import HIGH_IMPACT_FIXES, SafetyGuard
 from src.utils.logger import setup_logger
 
 logger = setup_logger("ai_agent")
@@ -114,6 +124,15 @@ class AIAgent:
 
         # Approval queue
         self._approval_queue = ApprovalQueue(db=ctx.db, config=ctx.agent_config)
+
+        # Safety guard
+        self._safety = SafetyGuard(
+            redis=ctx.redis,
+            circuit_breaker_threshold=ctx.agent_config.safety_circuit_breaker_threshold,
+            circuit_breaker_cooldown_s=ctx.agent_config.safety_circuit_breaker_cooldown_s,
+            max_fixes_per_cycle=ctx.agent_config.safety_max_fixes_per_cycle,
+            max_fixes_per_hour=ctx.agent_config.safety_max_fixes_per_hour,
+        )
 
     def _register_rules(self) -> None:
         """Register all monitor rules."""
@@ -162,6 +181,12 @@ class AIAgent:
         self._rule_registry.register(SuspiciousActivityRule())
         self._rule_registry.register(FailedAuthRule())
         self._rule_registry.register(APIUsageSpikeRule())
+        # Channels
+        self._rule_registry.register(WebhookDeliveryFailureRule())
+        self._rule_registry.register(ChannelDisconnectedRule())
+        self._rule_registry.register(ChannelRoutingErrorRule())
+        self._rule_registry.register(InactiveChannelRule())
+        self._rule_registry.register(VisitorResolutionFailureRule())
 
         # Stale session cleanup (scheduled)
         self._stale_session_fix = StaleSessionFix()
@@ -177,6 +202,9 @@ class AIAgent:
         self._fix_registry.register("security.api_spike", RateLimitThrottleFix())
         self._fix_registry.register("resilience.runpod_consecutive_failures", VideoDisableFix())
         self._fix_registry.register("resilience.dashscope_consecutive_timeouts", TextOnlyModeFix())
+        # Channels
+        self._fix_registry.register("channels.webhook_failures", TelegramWebhookReregisterFix())
+        self._fix_registry.register("channels.routing_errors", ChannelRoutingFallbackFix())
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -209,14 +237,35 @@ class AIAgent:
         logger.info("AI Agent stopped")
 
     async def _loop(self) -> None:
-        """Main scan loop — runs every scan_interval_s."""
+        """Main scan loop — runs every scan_interval_s.
+
+        Safety features:
+        - Kill switch check at the top of each cycle (Redis-based, instant disable)
+        - Circuit breaker skips rules that fail consecutively
+        - Fix rate limiter caps auto-fixes per cycle and per hour
+        - Entire cycle wrapped in broad exception handler to prevent crash
+        """
         while self._running:
             try:
-                detections = await self._rule_registry.run_all(self._ctx)
+                # Kill switch — skip entire cycle if engaged
+                if await self._safety.is_kill_switch_active():
+                    logger.info("Agent kill switch active — skipping scan cycle")
+                    await asyncio.sleep(self._ctx.agent_config.scan_interval_s)
+                    continue
+
+                # Reset per-cycle fix counter
+                self._safety.start_cycle()
+
+                detections = await self._safe_run_rules()
                 for d in detections:
                     await self._handle_detection(d)
+
                 # Expire stale approval requests
-                await self._approval_queue.expire_stale()
+                try:
+                    await self._approval_queue.expire_stale()
+                except Exception as exc:
+                    logger.debug(f"Approval expiry failed: {exc}")
+
                 self._last_scan = datetime.utcnow()
                 self._scan_count += 1
                 if detections:
@@ -224,19 +273,65 @@ class AIAgent:
                         f"Scan complete: {len(detections)} detections",
                         extra={"scan_number": self._scan_count},
                     )
+            except asyncio.CancelledError:
+                raise  # Allow clean shutdown
             except Exception as exc:
-                logger.error(f"Agent scan failed: {exc}")
+                # Broad catch — agent must NEVER crash the FastAPI process
+                logger.error(
+                    f"Agent scan failed (isolated): {exc}",
+                    extra={"scan_number": self._scan_count},
+                )
             await asyncio.sleep(self._ctx.agent_config.scan_interval_s)
 
+    async def _safe_run_rules(self) -> list[Detection]:
+        """Run all rules with circuit breaker integration.
+
+        Skips rules whose circuit breaker is open, and records
+        successes/failures to update breaker state.
+        """
+        all_detections: list[Detection] = []
+
+        async def _run_one_safe(rule: Any) -> list[Detection]:
+            rule_id = rule.rule_id
+            if self._safety.should_skip_rule(rule_id):
+                return []
+            try:
+                result = await rule.evaluate(self._ctx)
+                self._safety.circuit_breaker.record_success(rule_id)
+                return result
+            except Exception as exc:
+                self._safety.circuit_breaker.record_failure(rule_id)
+                logger.error(
+                    f"Rule {rule_id} failed: {exc}",
+                    extra={"rule_id": rule_id},
+                )
+                return []
+
+        results = await asyncio.gather(
+            *[_run_one_safe(r) for r in self._rule_registry.rules]
+        )
+        for batch in results:
+            all_detections.extend(batch)
+        return all_detections
+
     async def _stale_session_loop(self) -> None:
-        """Periodically clean up stale visitor sessions."""
+        """Periodically clean up stale visitor sessions.
+
+        Respects the kill switch and limits sessions closed per cycle.
+        """
         interval = self._ctx.agent_config.stale_session_check_interval_s
         while self._running:
             try:
+                # Skip if kill switch is active
+                if await self._safety.is_kill_switch_active():
+                    await asyncio.sleep(interval)
+                    continue
                 result = await self._stale_session_fix.apply_scheduled(self._ctx)
                 closed = result.get("sessions_closed", 0)
                 if closed:
                     logger.info(f"Stale session cleanup: {closed} sessions closed")
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 logger.debug(f"Stale session loop error: {exc}")
             await asyncio.sleep(interval)
@@ -244,7 +339,12 @@ class AIAgent:
     # ── Detection Handling ────────────────────────────────────────────────
 
     async def _handle_detection(self, d: Detection) -> None:
-        """Persist incident, record pattern, notify, try auto-fix."""
+        """Persist incident, record pattern, notify, try auto-fix.
+
+        Safety checks:
+        - High-impact fixes are routed to the approval queue
+        - Fix rate limiter caps the number of fixes per cycle/hour
+        """
         # 1. Persist incident
         incident_id = await self._persist_incident(d)
 
@@ -256,23 +356,68 @@ class AIAgent:
         await self._notifier.dispatch(d, incident_id)
 
         # 4. Auto-fix if enabled and applicable
-        if (
-            d.auto_fixable
-            and self._ctx.agent_config.auto_fix_enabled
-            and incident_id
-        ):
-            result = await self._fix_registry.try_fix(d, self._ctx)
-            if result is not None:
-                await self._persist_action(
-                    incident_id=incident_id,
-                    action_type=result.get("action", "unknown"),
-                    description=f"Auto-fix applied for {d.rule_id}",
-                    result=result,
-                    auto=True,
-                )
-                # Mark incident as auto-fixed
+        if not (d.auto_fixable and self._ctx.agent_config.auto_fix_enabled and incident_id):
+            return
+
+        # Check if this fix requires approval (high-impact)
+        handler = self._fix_registry._handlers.get(d.rule_id)
+        if handler is not None and getattr(handler, "fix_id", "") in HIGH_IMPACT_FIXES:
+            await self._route_to_approval(d, handler, incident_id)
+            return
+
+        # Check rate limits
+        if not self._safety.can_auto_fix(getattr(handler, "fix_id", "") if handler else ""):
+            logger.info(
+                f"Fix rate limit reached — skipping auto-fix for {d.rule_id}",
+                extra={"rule_id": d.rule_id, "cycle_count": self._safety.fix_limiter.cycle_count},
+            )
+            return
+
+        result = await self._fix_registry.try_fix(d, self._ctx)
+        if result is not None:
+            self._safety.record_fix_applied()
+            await self._persist_action(
+                incident_id=incident_id,
+                action_type=result.get("action", "unknown"),
+                description=f"Auto-fix applied for {d.rule_id}",
+                result=result,
+                auto=True,
+            )
+            if result.get("action") != "error":
                 await self._update_incident_status(incident_id, "auto_fixed")
                 await self._notifier.dispatch_status_change(incident_id, "auto_fixed")
+
+    async def _route_to_approval(
+        self, d: Detection, handler: Any, incident_id: str
+    ) -> None:
+        """Route a high-impact fix to the approval queue instead of auto-executing."""
+        fix_id = getattr(handler, "fix_id", "unknown")
+        logger.info(
+            f"High-impact fix {fix_id} requires approval — routing to queue",
+            extra={"rule_id": d.rule_id, "fix_id": fix_id},
+        )
+        approval_id = await self._approval_queue.request_approval(
+            action_type=fix_id.replace("fix.", ""),
+            target_id=d.rule_id,
+            description=(
+                f"Auto-fix '{fix_id}' triggered by rule '{d.rule_id}': {d.title}. "
+                f"This fix affects global pipeline state and requires admin approval."
+            ),
+            details={
+                "incident_id": incident_id,
+                "detection_details": d.details,
+                "severity": d.severity,
+                "recommendation": d.recommendation,
+            },
+        )
+        if approval_id:
+            await self._persist_action(
+                incident_id=incident_id,
+                action_type="approval_requested",
+                description=f"High-impact fix {fix_id} sent to approval queue",
+                result={"approval_id": approval_id, "fix_id": fix_id},
+                auto=True,
+            )
 
     def _make_pattern_key(self, d: Detection) -> str:
         """Create a stable pattern key from detection details."""
@@ -363,6 +508,10 @@ class AIAgent:
     @property
     def approval_queue(self) -> ApprovalQueue:
         return self._approval_queue
+
+    @property
+    def safety(self) -> SafetyGuard:
+        return self._safety
 
     async def get_stats(self) -> dict[str, Any]:
         """Return agent summary statistics."""
@@ -466,17 +615,56 @@ class AIAgent:
 
     async def acknowledge_incident(self, incident_id: str) -> dict[str, Any]:
         """Mark an incident as acknowledged."""
+        if not incident_id:
+            return {"error": "incident_id is required"}
+        if not await self._incident_exists(incident_id):
+            return {"error": "incident not found", "incident_id": incident_id}
         await self._update_incident_status(incident_id, "acknowledged")
         return {"incident_id": incident_id, "status": "acknowledged"}
 
     async def resolve_incident(self, incident_id: str) -> dict[str, Any]:
         """Mark an incident as resolved."""
+        if not incident_id:
+            return {"error": "incident_id is required"}
+        if not await self._incident_exists(incident_id):
+            return {"error": "incident not found", "incident_id": incident_id}
         await self._update_incident_status(incident_id, "resolved")
         return {"incident_id": incident_id, "status": "resolved"}
 
+    async def _incident_exists(self, incident_id: str) -> bool:
+        """Check if an incident exists in the database."""
+        if self._ctx.db is None:
+            return False
+        try:
+            from sqlalchemy import select
+            from src.db.models import AgentIncident
+
+            async with self._ctx.db.session_ctx() as session:
+                r = await session.execute(
+                    select(AgentIncident.id).where(AgentIncident.id == incident_id)
+                )
+                return r.scalar() is not None
+        except Exception:
+            return False
+
     async def run_manual_scan(self) -> list[dict[str, Any]]:
-        """Run a single scan and return detections (for on-demand API)."""
-        detections = await self._rule_registry.run_all(self._ctx)
+        """Run a single scan and return detections (for on-demand API).
+
+        Respects the same safety guards as the automated loop:
+        - Kill switch blocks the entire scan
+        - Circuit breakers skip failing rules
+        - Fix rate limiter caps auto-fixes
+        """
+        # Safety: honour the kill switch even for manual scans
+        if await self._safety.is_kill_switch_active():
+            logger.info("Manual scan blocked — kill switch active")
+            return []
+
+        # Reset per-cycle fix counter so rate limits apply cleanly
+        self._safety.start_cycle()
+
+        # Use _safe_run_rules (circuit-breaker aware) instead of raw run_all
+        detections = await self._safe_run_rules()
         for d in detections:
             await self._handle_detection(d)
         self._last_scan = datetime.utcnow()

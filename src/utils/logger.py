@@ -98,7 +98,11 @@ def setup_logger(
         Configured Logger instance with JSON output to stdout.
     """
     if level is None:
-        level = os.environ.get("LOG_LEVEL", "INFO")
+        try:
+            from src.config import get_settings
+            level = get_settings().log_level
+        except Exception:
+            level = os.environ.get("LOG_LEVEL", "INFO")
 
     logger = logging.getLogger(name)
 

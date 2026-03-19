@@ -105,7 +105,10 @@ class FailedAuthRule:
                     if ttl > 0 and ttl <= window_min * 60:
                         count = await ctx.redis.get(key)
                         if count:
-                            ip_failures[ip] = int(count) if isinstance(count, (bytes, str)) else count
+                            try:
+                                ip_failures[ip] = int(count) if isinstance(count, (bytes, str)) else count
+                            except (ValueError, TypeError):
+                                continue
 
                 if cursor == 0 or cursor == b"0":
                     break

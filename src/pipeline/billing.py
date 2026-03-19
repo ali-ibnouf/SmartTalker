@@ -1,7 +1,7 @@
 """Billing Engine for per-second session metering.
 
-Tracks active sessions, calculates costs at $0.001/sec,
-enforces quotas, and writes UsageRecords to the database.
+Tracks active sessions, calculates costs at $0.002/sec (configurable via
+billing_rate_per_second), enforces quotas, and writes UsageRecords to the database.
 """
 
 from __future__ import annotations

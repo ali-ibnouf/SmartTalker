@@ -635,7 +635,7 @@ class TestFailedPaymentRule:
         mock_session = AsyncMock()
         mock_session.execute = AsyncMock(return_value=MagicMock(
             all=MagicMock(return_value=[
-                ("cust-1", "Acme Corp", "professional", 3),
+                ("cust-1", "Acme Corp", "professional", 4),
             ])
         ))
         mock_db.session_ctx = MagicMock(return_value=_AsyncCM(mock_session))
@@ -645,8 +645,8 @@ class TestFailedPaymentRule:
         detections = await rule.evaluate(ctx)
 
         assert len(detections) == 1
-        assert detections[0].severity == "critical"
-        assert detections[0].details["failures"] == 3
+        assert detections[0].severity == "critical"  # critical at >= threshold*2 (4)
+        assert detections[0].details["failures"] == 4
 
     @pytest.mark.asyncio
     async def test_warning_at_two_failures(self):

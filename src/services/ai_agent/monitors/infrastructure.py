@@ -444,6 +444,8 @@ class RunPodQueueDepthRule:
                     return []
 
                 data = resp.json()
+                if not isinstance(data, dict):
+                    return []
                 # RunPod health returns: jobs.inQueue, jobs.inProgress, workers.idle, etc.
                 jobs = data.get("jobs", {})
                 in_queue = jobs.get("inQueue", 0)
@@ -603,7 +605,7 @@ class RunPodHealthRule:
             return []
 
         # Check RunPod endpoint reachability
-        endpoint_url = getattr(config, "runpod_endpoint_url", "") or ""
+        endpoint_url = getattr(config, "runpod_endpoint_musetalk", "") or ""
         api_key = getattr(config, "runpod_api_key", "") or ""
 
         if endpoint_url and api_key:
@@ -705,15 +707,16 @@ class R2ConnectivityRule:
         if config is None:
             return []
 
-        bucket = getattr(config, "r2_bucket_name", "") or ""
-        endpoint = getattr(config, "r2_endpoint_url", "") or ""
-        if not bucket or not endpoint:
+        bucket = getattr(config, "r2_bucket", "") or ""
+        account_id = getattr(config, "r2_account_id", "") or ""
+        if not bucket or not account_id:
             return []
 
         try:
             import boto3
             from botocore.config import Config as BotoConfig
 
+            endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
             client = boto3.client(
                 "s3",
                 endpoint_url=endpoint,
@@ -771,6 +774,8 @@ class RunPodWorkersRule:
                     return []
 
                 data = resp.json()
+                if not isinstance(data, dict):
+                    return []
                 workers = data.get("workers", {})
                 idle = workers.get("idle", 0)
                 running = workers.get("running", 0)
@@ -1277,14 +1282,16 @@ class R2DowntimeRule:
             if consecutive == 0 or last_failure == 0.0:
                 return []
 
-            downtime_s = time.time() - last_failure
+            since_last_failure_s = time.time() - last_failure
             threshold_s = ctx.agent_config.r2_downtime_threshold_s
 
-            # Only fire if there are active consecutive failures
-            # and the first failure was > threshold ago
-            if consecutive >= 3 and downtime_s <= threshold_s:
-                # Recent failures — still accumulating, wait for threshold
-                # Estimate downtime from consecutive failures (rough)
+            # since_last_failure_s measures how long ago the last failure was.
+            # If consecutive is still high, no successful upload has reset
+            # the counter. Two cases:
+            #   <= threshold: failures started recently, still developing → warning
+            #   >  threshold: failures ongoing for extended period → critical
+            if consecutive >= 3 and since_last_failure_s <= threshold_s:
+                # Failures started recently — still accumulating
                 return [Detection(
                     rule_id=self.rule_id,
                     severity="warning",
@@ -1295,24 +1302,25 @@ class R2DowntimeRule:
                     ),
                     details={
                         "consecutive_failures": consecutive,
-                        "last_failure_age_s": round(downtime_s, 1),
+                        "last_failure_age_s": round(since_last_failure_s, 1),
                     },
                     recommendation="Check R2 credentials and endpoint connectivity.",
                 )]
-            elif consecutive >= 3 and downtime_s > threshold_s:
+            elif consecutive >= 3 and since_last_failure_s > threshold_s:
+                # Extended downtime — failures ongoing for > threshold
                 return [Detection(
                     rule_id=self.rule_id,
                     severity="critical",
-                    title=f"R2 storage DOWN: {consecutive} failures over {downtime_s:.0f}s",
+                    title=f"R2 storage DOWN: {consecutive} failures over {since_last_failure_s:.0f}s",
                     description=(
-                        f"R2 storage has been failing for {downtime_s:.0f}s "
+                        f"R2 storage has been failing for {since_last_failure_s:.0f}s "
                         f"with {consecutive} consecutive failures "
                         f"(threshold: {threshold_s:.0f}s). "
                         f"All media uploads are failing."
                     ),
                     details={
                         "consecutive_failures": consecutive,
-                        "downtime_s": round(downtime_s, 1),
+                        "since_last_failure_s": round(since_last_failure_s, 1),
                         "threshold_s": threshold_s,
                     },
                     recommendation=(

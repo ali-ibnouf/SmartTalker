@@ -162,6 +162,85 @@ async def create_workflow(body: WorkflowCreateRequest, request: Request):
     return _workflow_to_response(wf)
 
 
+# ── List Templates ──────────────────────────────────────────────────────────
+# IMPORTANT: This must be defined BEFORE /workflows/{workflow_id} to avoid
+# FastAPI matching "templates" as a workflow_id path parameter.
+
+
+@router.get("/workflows/templates", response_model=WorkflowTemplateListResponse)
+async def list_templates(request: Request):
+    """Return built-in workflow templates."""
+    try:
+        from src.pipeline.workflow_engine import WORKFLOW_TEMPLATES
+    except ImportError:
+        WORKFLOW_TEMPLATES = {}
+
+    templates = []
+    for tid, tpl in WORKFLOW_TEMPLATES.items():
+        raw_steps = tpl.get("steps", [])
+        steps = []
+        for s in raw_steps:
+            if isinstance(s, dict):
+                steps.append(WorkflowStepSchema(
+                    type=s.get("type", ""),
+                    config=s.get("config", {}),
+                ))
+        templates.append(WorkflowTemplateResponse(
+            template_id=tid,
+            name=tpl.get("name", tid),
+            description=tpl.get("description", ""),
+            trigger_type=tpl.get("trigger_type", "manual"),
+            steps=steps,
+        ))
+
+    return WorkflowTemplateListResponse(
+        templates=templates,
+        count=len(templates),
+    )
+
+
+# ── Create from Template ────────────────────────────────────────────────────
+
+
+@router.post("/workflows/from-template/{template_id}", response_model=WorkflowResponse, status_code=201)
+async def create_from_template(template_id: str, request: Request):
+    """Create a new workflow from a built-in template."""
+    try:
+        from src.pipeline.workflow_engine import WORKFLOW_TEMPLATES
+    except ImportError:
+        WORKFLOW_TEMPLATES = {}
+
+    tpl = WORKFLOW_TEMPLATES.get(template_id)
+    if not tpl:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+
+    db = _get_db(request)
+    customer_id = _get_customer_id(request)
+
+    steps_json = json.dumps(tpl.get("steps", []))
+    trigger_config_json = json.dumps(tpl.get("trigger_config", {}))
+
+    async with db.session() as session:
+        wf = Workflow(
+            customer_id=customer_id,
+            name=tpl.get("name", template_id),
+            description=tpl.get("description", ""),
+            trigger_type=tpl.get("trigger_type", "manual"),
+            trigger_config=trigger_config_json,
+            steps=steps_json,
+            template_id=template_id,
+        )
+        session.add(wf)
+        await session.commit()
+        await session.refresh(wf)
+
+    logger.info(
+        "workflow_created_from_template",
+        extra={"workflow_id": wf.id, "template_id": template_id, "customer_id": customer_id},
+    )
+    return _workflow_to_response(wf)
+
+
 # ── Get Workflow ────────────────────────────────────────────────────────────
 
 
@@ -308,83 +387,6 @@ async def deactivate_workflow(workflow_id: str, request: Request):
         await session.refresh(wf)
 
     logger.info("workflow_deactivated", extra={"workflow_id": workflow_id, "customer_id": customer_id})
-    return _workflow_to_response(wf)
-
-
-# ── List Templates ──────────────────────────────────────────────────────────
-
-
-@router.get("/workflows/templates", response_model=WorkflowTemplateListResponse)
-async def list_templates(request: Request):
-    """Return built-in workflow templates."""
-    try:
-        from src.pipeline.workflow_engine import WORKFLOW_TEMPLATES
-    except ImportError:
-        WORKFLOW_TEMPLATES = {}
-
-    templates = []
-    for tid, tpl in WORKFLOW_TEMPLATES.items():
-        raw_steps = tpl.get("steps", [])
-        steps = []
-        for s in raw_steps:
-            if isinstance(s, dict):
-                steps.append(WorkflowStepSchema(
-                    type=s.get("type", ""),
-                    config=s.get("config", {}),
-                ))
-        templates.append(WorkflowTemplateResponse(
-            template_id=tid,
-            name=tpl.get("name", tid),
-            description=tpl.get("description", ""),
-            trigger_type=tpl.get("trigger_type", "manual"),
-            steps=steps,
-        ))
-
-    return WorkflowTemplateListResponse(
-        templates=templates,
-        count=len(templates),
-    )
-
-
-# ── Create from Template ────────────────────────────────────────────────────
-
-
-@router.post("/workflows/from-template/{template_id}", response_model=WorkflowResponse, status_code=201)
-async def create_from_template(template_id: str, request: Request):
-    """Create a new workflow from a built-in template."""
-    try:
-        from src.pipeline.workflow_engine import WORKFLOW_TEMPLATES
-    except ImportError:
-        WORKFLOW_TEMPLATES = {}
-
-    tpl = WORKFLOW_TEMPLATES.get(template_id)
-    if not tpl:
-        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
-
-    db = _get_db(request)
-    customer_id = _get_customer_id(request)
-
-    steps_json = json.dumps(tpl.get("steps", []))
-    trigger_config_json = json.dumps(tpl.get("trigger_config", {}))
-
-    async with db.session() as session:
-        wf = Workflow(
-            customer_id=customer_id,
-            name=tpl.get("name", template_id),
-            description=tpl.get("description", ""),
-            trigger_type=tpl.get("trigger_type", "manual"),
-            trigger_config=trigger_config_json,
-            steps=steps_json,
-            template_id=template_id,
-        )
-        session.add(wf)
-        await session.commit()
-        await session.refresh(wf)
-
-    logger.info(
-        "workflow_created_from_template",
-        extra={"workflow_id": wf.id, "template_id": template_id, "customer_id": customer_id},
-    )
     return _workflow_to_response(wf)
 
 

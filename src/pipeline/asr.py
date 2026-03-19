@@ -65,6 +65,15 @@ class ASRSession:
         self._audio_duration_s = 0.0
         self._closed = False
 
+    async def close(self) -> None:
+        """Close the underlying WebSocket connection without waiting for results."""
+        if not self._closed:
+            self._closed = True
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+
     async def send_audio(self, pcm_bytes: bytes) -> None:
         """Send a chunk of PCM audio (16-bit signed mono) to the ASR session.
 
@@ -198,11 +207,14 @@ class ASREngine:
         }
 
         try:
-            ws = await websockets.connect(
-                self._ws_url,
-                additional_headers=headers,
-                ping_interval=20,
-                ping_timeout=10,
+            ws = await asyncio.wait_for(
+                websockets.connect(
+                    self._ws_url,
+                    additional_headers=headers,
+                    ping_interval=20,
+                    ping_timeout=10,
+                ),
+                timeout=15.0,
             )
 
             # Send session.update to configure the ASR session

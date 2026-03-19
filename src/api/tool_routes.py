@@ -198,6 +198,9 @@ async def update_tool(tool_db_id: str, body: ToolUpdateRequest, request: Request
         if body.input_schema is not None:
             tool.input_schema = json.dumps(body.input_schema)
         if body.api_url is not None:
+            from src.agent.security import validate_tool_url
+            if not validate_tool_url(body.api_url):
+                raise HTTPException(status_code=400, detail="URL blocked by SSRF policy")
             tool.api_url = body.api_url
         if body.api_method is not None:
             tool.api_method = body.api_method.upper()

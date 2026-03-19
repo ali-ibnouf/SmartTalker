@@ -16,8 +16,10 @@ from src.services.ai_agent.schemas import (
     IncidentActionResponse,
     IncidentItem,
     IncidentListResponse,
+    KillSwitchResponse,
     PredictionItem,
     PredictionListResponse,
+    SafetyStatusResponse,
     ScanResponse,
 )
 
@@ -92,6 +94,9 @@ async def acknowledge_incident(request: Request, incident_id: str):
     if agent is None:
         return IncidentActionResponse(incident_id=incident_id, status="error")
     result = await agent.acknowledge_incident(incident_id)
+    if "error" in result:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content=result)
     return IncidentActionResponse(**result)
 
 
@@ -102,6 +107,9 @@ async def resolve_incident(request: Request, incident_id: str):
     if agent is None:
         return IncidentActionResponse(incident_id=incident_id, status="error")
     result = await agent.resolve_incident(incident_id)
+    if "error" in result:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content=result)
     return IncidentActionResponse(**result)
 
 
@@ -235,3 +243,40 @@ async def reject_action(request: Request, approval_id: str):
         approval_id=result["approval_id"],
         status=result["status"],
     )
+
+
+# ── Safety Controls ──────────────────────────────────────────────────────
+
+
+@router.get("/safety/status", response_model=SafetyStatusResponse)
+async def get_safety_status(request: Request):
+    """Get the current safety guard status (kill switch, circuit breakers, fix limits)."""
+    agent = _get_agent(request)
+    if agent is None:
+        return SafetyStatusResponse()
+    raw = await agent.safety.get_status()
+    return SafetyStatusResponse(**raw)
+
+
+@router.post("/safety/kill-switch/activate", response_model=KillSwitchResponse)
+async def activate_kill_switch(request: Request):
+    """Activate the agent kill switch — stops all scanning and auto-fixes immediately."""
+    agent = _get_agent(request)
+    if agent is None:
+        return KillSwitchResponse(status="error", detail="Agent not running")
+    ok = await agent.safety.activate_kill_switch(reason="admin_api")
+    if ok:
+        return KillSwitchResponse(status="activated", detail="Agent kill switch engaged — all activity paused")
+    return KillSwitchResponse(status="error", detail="Failed to activate (Redis unavailable?)")
+
+
+@router.post("/safety/kill-switch/deactivate", response_model=KillSwitchResponse)
+async def deactivate_kill_switch(request: Request):
+    """Deactivate the agent kill switch — resumes normal operation."""
+    agent = _get_agent(request)
+    if agent is None:
+        return KillSwitchResponse(status="error", detail="Agent not running")
+    ok = await agent.safety.deactivate_kill_switch()
+    if ok:
+        return KillSwitchResponse(status="deactivated", detail="Agent kill switch released — normal operation resumed")
+    return KillSwitchResponse(status="error", detail="Failed to deactivate (Redis unavailable?)")

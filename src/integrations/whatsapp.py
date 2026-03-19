@@ -214,7 +214,8 @@ class WhatsAppClient:
             # Step 1: Get media URL
             url_response = await client.get(f"/{media_id}")
             url_response.raise_for_status()
-            media_url = url_response.json().get("url", "")
+            url_data = url_response.json()
+            media_url = url_data.get("url", "") if isinstance(url_data, dict) else ""
 
             if not media_url:
                 raise WhatsAppError(message=f"No URL returned for media {media_id}")

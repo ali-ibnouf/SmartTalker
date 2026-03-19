@@ -27,10 +27,14 @@ env/
 .project
 .settings/
 
-# ── Environment ──────────────────────────────────────────────────────────────
+# ── Environment & Secrets — NEVER commit ─────────────────────────────────────
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
 
 # ── AI Models (large files) ─────────────────────────────────────────────────
 models/*
@@ -87,7 +91,13 @@ run_tests_debug.py
 Thumbs.db
 desktop.ini
 
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+
 # ── Misc ─────────────────────────────────────────────────────────────────────
 *.log
 *.tmp
 *.bak
+nul
+.last_agent_run
+api_test_output.txt

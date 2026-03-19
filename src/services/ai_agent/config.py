@@ -74,12 +74,13 @@ class AgentSettings(BaseSettings):
     margin_squeeze_pct: float = 60.0  # alert if cost > N% of revenue
 
     # Alert cooldown — suppress duplicate alerts within these windows (seconds)
+    # Keys must match the actual rule_id values used by monitor rules.
     alert_cooldown: dict[str, int] = {
-        "dashscope_timeout": 300,       # 5 min
-        "runpod_failure": 300,          # 5 min
-        "margin_squeeze": 86400,        # 24h
-        "r2_failure": 120,              # 2 min
-        "low_balance": 3600,            # 1h
+        "resilience.dashscope_consecutive_timeouts": 300,  # 5 min
+        "resilience.runpod_consecutive_failures": 300,     # 5 min
+        "resilience.margin_squeeze": 86400,                # 24h
+        "resilience.r2_downtime": 120,                     # 2 min
+        "infra.dashscope_quota": 3600,                     # 1h
     }
     alert_cooldown_default_s: int = 60  # default for rule_ids not in the dict
 
@@ -90,6 +91,20 @@ class AgentSettings(BaseSettings):
     quota_grace_hours: int = 2
     throttle_duration_s: int = 600
     throttle_rate_limit: int = 50
+
+    # Channel monitoring thresholds
+    webhook_failure_threshold: int = 5  # failures before alerting
+    channel_routing_error_threshold: int = 10  # routing errors per hour
+    channel_inactive_days: int = 7  # days of no messages before alerting
+    visitor_resolve_fail_threshold: int = 10  # failures per hour before alerting
+
+    # Safety guard
+    safety_max_fixes_per_cycle: int = 3
+    safety_max_fixes_per_hour: int = 10
+    safety_circuit_breaker_threshold: int = 5
+    safety_circuit_breaker_cooldown_s: int = 600  # 10 minutes
+    safety_db_kill_max: int = 5  # max DB connections to kill per fix
+    safety_max_session_close_per_cycle: int = 5  # max sessions to close per cleanup
 
     # Approval queue
     approval_expiry_hours: int = 24

@@ -325,113 +325,134 @@ async def list_voices(request: Request) -> VoiceListResponse:
 
 @router.get(
     "/health",
-    response_model=HealthResponse,
     summary="Health Check",
-    description="Check system health, model availability, and uptime.",
+    description="Basic health check with uptime.",
+    tags=["health"],
 )
-async def health_check(request: Request) -> HealthResponse:
-    """Return system health information.
-
-    Args:
-        request: FastAPI request object.
-
-    Returns:
-        HealthResponse with status, uptime, and loaded models.
-    """
-    pipeline = request.app.state.pipeline
-    health = await pipeline.health_check()
-
-    return HealthResponse(**health)
+async def health_check(request: Request):
+    """Return basic ok + uptime + loaded models."""
+    pipeline = getattr(request.app.state, "pipeline", None)
+    if pipeline:
+        health = await pipeline.health_check()
+        return health
+    return {"status": "healthy", "uptime_s": 0.0, "models_loaded": {}}
 
 
 @router.get("/health/db", summary="Database Health", tags=["health"])
 async def health_db(request: Request):
-    """Check PostgreSQL connectivity."""
+    """Check PostgreSQL connectivity + latency."""
+    import time
+
     db = getattr(request.app.state, "db", None)
     if db is None:
         return {"status": "unavailable", "detail": "No database configured"}
     try:
         from sqlalchemy import text
+
+        t0 = time.perf_counter()
         async with db.session() as session:
             await session.execute(text("SELECT 1"))
-        return {"status": "healthy"}
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        return {"status": "healthy", "latency_ms": latency_ms}
     except Exception as exc:
         return {"status": "unhealthy", "detail": str(exc)}
 
 
 @router.get("/health/redis", summary="Redis Health", tags=["health"])
 async def health_redis(request: Request):
-    """Check Redis connectivity."""
+    """Check Redis connectivity + latency."""
+    import time
+
     redis = getattr(request.app.state, "redis", None)
     if redis is None:
         return {"status": "unavailable", "detail": "No Redis configured"}
     try:
+        t0 = time.perf_counter()
         await redis.ping()
-        return {"status": "healthy"}
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        return {"status": "healthy", "latency_ms": latency_ms}
     except Exception as exc:
         return {"status": "unhealthy", "detail": str(exc)}
 
 
 @router.get("/health/dashscope", summary="DashScope API Health", tags=["health"])
 async def health_dashscope(request: Request):
-    """Check DashScope API connectivity (lightweight model list call)."""
+    """Check DashScope API connectivity (lightweight model list call) + latency."""
+    import time
+
     config = getattr(request.app.state, "config", None)
     if not config or not getattr(config, "dashscope_api_key", ""):
         return {"status": "unavailable", "detail": "DashScope not configured"}
     try:
         import httpx
+
+        t0 = time.perf_counter()
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(
-                "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+                f"{config.dashscope_base_url}/models",
                 headers={"Authorization": f"Bearer {config.dashscope_api_key}"},
             )
-            return {
-                "status": "healthy" if resp.status_code == 200 else "degraded",
-                "status_code": resp.status_code,
-            }
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        return {
+            "status": "healthy" if resp.status_code == 200 else "degraded",
+            "status_code": resp.status_code,
+            "latency_ms": latency_ms,
+        }
     except Exception as exc:
         return {"status": "unhealthy", "detail": str(exc)}
 
 
 @router.get("/health/runpod", summary="RunPod Health", tags=["health"])
 async def health_runpod(request: Request):
-    """Check RunPod endpoint availability."""
+    """Check RunPod endpoint availability + latency."""
+    import time
+
     config = getattr(request.app.state, "config", None)
     if not config or not getattr(config, "runpod_api_key", ""):
         return {"status": "unavailable", "detail": "RunPod not configured"}
     try:
         import httpx
+
+        t0 = time.perf_counter()
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(
-                f"{config.runpod_render_endpoint}/health",
+                f"{config.runpod_endpoint_musetalk}/health",
                 headers={"Authorization": f"Bearer {config.runpod_api_key}"},
             )
-            return {
-                "status": "healthy" if resp.status_code in (200, 401) else "degraded",
-                "status_code": resp.status_code,
-            }
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        return {
+            "status": "healthy" if resp.status_code in (200, 401) else "degraded",
+            "status_code": resp.status_code,
+            "latency_ms": latency_ms,
+        }
     except Exception as exc:
         return {"status": "unhealthy", "detail": str(exc)}
 
 
 @router.get("/health/r2", summary="R2 Storage Health", tags=["health"])
 async def health_r2(request: Request):
-    """Check Cloudflare R2 connectivity."""
+    """Check Cloudflare R2 connectivity (bucket list test) + latency."""
+    import time
+
     config = getattr(request.app.state, "config", None)
-    if not config or not getattr(config, "r2_access_key", ""):
+    if not config or not getattr(config, "r2_access_key_id", ""):
         return {"status": "unavailable", "detail": "R2 not configured"}
     try:
         import boto3
         from botocore.config import Config as BotoConfig
+
+        r2_endpoint = f"https://{config.r2_account_id}.r2.cloudflarestorage.com"
         client = boto3.client(
             "s3",
-            endpoint_url=config.r2_endpoint_url,
-            aws_access_key_id=config.r2_access_key,
-            aws_secret_access_key=config.r2_secret_key,
+            endpoint_url=r2_endpoint,
+            aws_access_key_id=config.r2_access_key_id,
+            aws_secret_access_key=config.r2_secret_access_key,
             config=BotoConfig(region_name="auto"),
         )
-        client.head_bucket(Bucket=config.r2_bucket_name)
-        return {"status": "healthy"}
+        t0 = time.perf_counter()
+        client.head_bucket(Bucket=config.r2_bucket)
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        return {"status": "healthy", "latency_ms": latency_ms}
     except Exception as exc:
         return {"status": "unhealthy", "detail": str(exc)}
 
@@ -2523,6 +2544,19 @@ async def set_avatar_type(
                 status_code=400,
                 detail="No VRM file uploaded for this avatar. Upload one first via POST /avatars/{id}/vrm",
             )
+
+    # Persist the avatar type to the database
+    db = getattr(request.app.state, "db", None)
+    if db is not None:
+        from sqlalchemy import update
+        from src.db.models import Avatar
+        async with db.session_ctx() as session:
+            result = await session.execute(
+                update(Avatar).where(Avatar.id == avatar_id).values(avatar_type=body.avatar_type)
+            )
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Avatar not found")
+
     logger.info("Avatar type changed", extra={"avatar_id": avatar_id, "type": body.avatar_type})
     return {"avatar_id": avatar_id, "avatar_type": body.avatar_type, "message": "Avatar type updated"}
 

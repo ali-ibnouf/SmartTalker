@@ -94,6 +94,15 @@ class TTSStream:
         self._finished = False
         self._seq = 0
 
+    async def aclose(self) -> None:
+        """Close the underlying WebSocket connection."""
+        if not self._finished:
+            self._finished = True
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+
     @property
     def duration_seconds(self) -> float:
         """Calculated duration from total audio bytes (48kHz 16-bit mono = 96000 bytes/sec)."""
@@ -158,6 +167,10 @@ class TTSStream:
             raise
         except Exception as exc:
             self._finished = True
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
             raise TTSError(
                 message="TTS stream error",
                 detail=str(exc),
@@ -318,11 +331,14 @@ class TTSEngine:
         }
 
         try:
-            ws = await websockets.connect(
-                self._ws_url,
-                additional_headers=headers,
-                ping_interval=20,
-                ping_timeout=10,
+            ws = await asyncio.wait_for(
+                websockets.connect(
+                    self._ws_url,
+                    additional_headers=headers,
+                    ping_interval=20,
+                    ping_timeout=10,
+                ),
+                timeout=15.0,
             )
 
             # Configure TTS session
@@ -507,10 +523,10 @@ class TTSEngine:
     def list_voices(self) -> list[VoiceInfo]:
         return list(self._voices.values())
 
-    def unload(self) -> None:
+    async def unload(self) -> None:
         """Clean up HTTP client."""
         self._loaded = False
         if self._http_client is not None and not self._http_client.is_closed:
-            # Cannot await in sync method — client will be garbage collected
+            await self._http_client.aclose()
             self._http_client = None
         logger.info("TTS engine unloaded")

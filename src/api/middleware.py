@@ -419,7 +419,11 @@ class RequestBodyLimitMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > self.max_bytes:
+        try:
+            cl_int = int(content_length) if content_length else 0
+        except (ValueError, TypeError):
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
+        if cl_int > self.max_bytes:
             return JSONResponse(
                 status_code=413,
                 content={

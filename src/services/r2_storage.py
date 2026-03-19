@@ -320,11 +320,18 @@ class R2Storage:
 
                 # Batch delete (max 1000 per request)
                 delete_keys = [{"Key": obj["Key"]} for obj in objects]
-                client.delete_objects(
+                resp = client.delete_objects(
                     Bucket=self._bucket,
                     Delete={"Objects": delete_keys, "Quiet": True},
                 )
-                deleted += len(delete_keys)
+                # Check for partial failures (Quiet=True suppresses success msgs but keeps errors)
+                errors = resp.get("Errors", [])
+                if errors:
+                    logger.warning(
+                        f"R2 partial delete failure: {len(errors)}/{len(delete_keys)} objects failed",
+                        extra={"prefix": prefix, "errors": errors[:5]},
+                    )
+                deleted += len(delete_keys) - len(errors)
 
         except Exception as exc:
             raise R2Error(

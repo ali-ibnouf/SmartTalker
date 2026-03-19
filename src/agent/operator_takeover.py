@@ -87,6 +87,23 @@ async def synthesize_operator_message(
         result["audio_duration_ms"] = duration_ms
         result["tts_cost_usd"] = tts_stream.cost_usd
 
+        # Log TTS cost to api_usage
+        if app and tts_stream.cost_usd > 0:
+            try:
+                from src.api.ws_visitor import _record_cost
+                customer_id = getattr(avatar, "customer_id", "") if avatar else ""
+                await _record_cost(
+                    app=app,
+                    service="tts",
+                    customer_id=customer_id,
+                    session_id=session_id,
+                    cost_usd=tts_stream.cost_usd,
+                    duration_ms=duration_ms,
+                    details={"source": "operator_takeover", "text_length": len(text)},
+                )
+            except Exception as cost_exc:
+                logger.debug(f"Failed to record TTS cost: {cost_exc}")
+
     except Exception as exc:
         logger.warning(f"TTS synthesis failed for operator message: {exc}")
         result["tts_error"] = str(exc)
@@ -129,6 +146,23 @@ async def synthesize_operator_message(
 
             result["video_url"] = render_result.video_url
             result["render_cost_usd"] = render_result.cost_usd
+
+            # Log GPU cost to api_usage
+            if app and render_result.cost_usd > 0:
+                try:
+                    from src.api.ws_visitor import _record_cost
+                    customer_id = getattr(avatar, "customer_id", "") if avatar else ""
+                    await _record_cost(
+                        app=app,
+                        service="runpod",
+                        customer_id=customer_id,
+                        session_id=session_id,
+                        cost_usd=render_result.cost_usd,
+                        duration_ms=render_result.execution_time_ms,
+                        details={"source": "operator_takeover", "job_id": render_result.job_id},
+                    )
+                except Exception as cost_exc:
+                    logger.debug(f"Failed to record GPU cost: {cost_exc}")
 
             await runpod.close()
 

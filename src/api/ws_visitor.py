@@ -104,6 +104,18 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
             },
         )
 
+        # Start billing session
+        if billing and customer_id:
+            try:
+                await billing.start_session(
+                    session_id=session_id,
+                    customer_id=customer_id,
+                    avatar_id=employee_id or "",
+                    channel="web",
+                )
+            except Exception as exc:
+                logger.warning(f"Billing start failed: {exc}")
+
         # ── Step 2: Message loop ──────────────────────────────────────
         while True:
             raw = await websocket.receive_text()
@@ -209,16 +221,22 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
 
         duration_s = time.perf_counter() - session_start
 
-        # Deduct billing seconds
-        if billing and customer_id:
+        # Stop billing session (calculates cost and writes usage record)
+        if billing and session_id:
             try:
-                await billing.deduct_seconds(
-                    customer_id=customer_id,
-                    seconds=duration_s,
-                    session_id=session_id,
-                )
+                await billing.stop_session(session_id)
             except Exception as exc:
-                logger.warning(f"Billing deduction failed: {exc}")
+                logger.warning(f"Billing stop failed: {exc}")
+
+        # Trigger auto-learning extraction in the background (non-blocking)
+        learning_engine = getattr(app.state, "learning_engine", None)
+        if learning_engine and session_id and employee_id and customer_id:
+            task = asyncio.create_task(
+                _run_auto_learning(
+                    learning_engine, session_id, employee_id, customer_id,
+                )
+            )
+            task.add_done_callback(_bg_task_error_handler)
 
         log_with_latency(
             logger,
@@ -229,6 +247,36 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
 
 
 # ── Internal Helpers ───────────────────────────────────────────────────────
+
+
+def _bg_task_error_handler(task: asyncio.Task) -> None:
+    """Log exceptions from background tasks to prevent silent failures."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error(f"Background task failed: {exc}", extra={"task": task.get_name()})
+
+
+async def _run_auto_learning(
+    learning_engine: Any,
+    session_id: str,
+    employee_id: str,
+    customer_id: str,
+) -> None:
+    """Run auto-learning extraction as a fire-and-forget background task."""
+    try:
+        await learning_engine.process_session(
+            session_id=session_id,
+            employee_id=employee_id,
+            customer_id=customer_id,
+            visitor_id=session_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            f"Auto-learning background task failed: {exc}",
+            extra={"session_id": session_id},
+        )
 
 
 async def _send(ws: WebSocket, data: dict) -> None:
@@ -283,7 +331,10 @@ async def _authenticate(
         import jwt as pyjwt
 
         config = get_settings()
-        secret = config.api_key or "dev-secret"
+        secret = config.api_key
+        if not secret:
+            logger.error("API_KEY not configured — cannot authenticate visitor sessions")
+            return None, None
         payload = pyjwt.decode(token, secret, algorithms=["HS256"])
         customer_id = payload.get("customer_id", payload.get("sub", ""))
 
@@ -530,34 +581,33 @@ async def _process_and_respond(
                     "session_id": session_id,
                     "reason": "Video rendering temporarily disabled due to repeated failures",
                 })
-                raise Exception("video_disabled")  # Skip to finally block
+            else:
+                # Upload audio to R2
+                audio_url = r2.upload_audio(session_id, audio_bytes)
 
-            # Upload audio to R2
-            audio_url = r2.upload_audio(session_id, audio_bytes)
+                # Submit render job
+                render_result = await runpod.render_lipsync(
+                    audio_url=audio_url,
+                    face_data_url=avatar.face_data_url,
+                    employee_id=employee_id,
+                    session_id=session_id,
+                )
 
-            # Submit render job
-            render_result = await runpod.render_lipsync(
-                audio_url=audio_url,
-                face_data_url=avatar.face_data_url,
-                employee_id=employee_id,
-                session_id=session_id,
-            )
+                await _send(websocket, {
+                    "type": "video_url",
+                    "url": render_result.video_url,
+                    "session_id": session_id,
+                })
 
-            await _send(websocket, {
-                "type": "video_url",
-                "url": render_result.video_url,
-                "session_id": session_id,
-            })
+                # Record RunPod cost
+                await _record_cost(
+                    app, "runpod", customer_id, session_id,
+                    cost_usd=render_result.cost_usd,
+                    duration_ms=render_result.execution_time_ms,
+                    details={"task": "render_lipsync", "job_id": render_result.job_id},
+                )
 
-            # Record RunPod cost
-            await _record_cost(
-                app, "runpod", customer_id, session_id,
-                cost_usd=render_result.cost_usd,
-                duration_ms=render_result.execution_time_ms,
-                details={"task": "render_lipsync", "job_id": render_result.job_id},
-            )
-
-            await runpod.close()
+                await runpod.close()
 
         except Exception as exc:
             logger.warning(f"RunPod render failed, falling back to VRM: {exc}")

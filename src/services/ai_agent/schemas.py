@@ -91,3 +91,15 @@ class ApprovalActionResponse(BaseModel):
     action_type: str = ""
     target_id: str = ""
     execution_result: dict[str, Any] = {}
+
+
+class SafetyStatusResponse(BaseModel):
+    kill_switch_active: bool = False
+    open_circuit_breakers: list[str] = []
+    fixes_this_hour: int = 0
+    high_impact_fixes_requiring_approval: list[str] = []
+
+
+class KillSwitchResponse(BaseModel):
+    status: str = ""
+    detail: str = ""

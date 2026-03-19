@@ -120,12 +120,13 @@ class TestLLMEngine:
         data = {"usage": {"total_tokens": 150}}
         assert LLMEngine._extract_tokens(data) == 150
 
-    def test_clear_history(self, config):
+    @pytest.mark.asyncio
+    async def test_clear_history(self, config):
         """History clears correctly."""
         from src.pipeline.llm import LLMEngine
         engine = LLMEngine(config)
         engine._sessions["test-session"] = MagicMock()
-        engine.clear_history()
+        await engine.clear_history()
         assert len(engine._sessions) == 0
 
 

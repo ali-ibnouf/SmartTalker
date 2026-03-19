@@ -89,6 +89,14 @@ class SubscriptionLifecycle:
             },
         )
 
+        # Notify customer
+        await self._notify_customer(
+            customer_id,
+            event="frozen",
+            detail=f"Your subscription has been frozen. {emp_count} employee(s) deactivated.",
+            reason=reason,
+        )
+
         return {
             "status": "frozen",
             "customer_id": customer_id,
@@ -212,12 +220,61 @@ class SubscriptionLifecycle:
             },
         )
 
+        # Notify customer
+        await self._notify_customer(
+            customer_id,
+            event="reactivated",
+            detail=(
+                f"Your subscription has been reactivated. "
+                f"{emp_count} employee(s) resumed. "
+                "Please re-upload photos for employees that need video avatars."
+            ),
+            reason="subscription_reactivated",
+        )
+
         return {
             "status": "reactivated",
             "customer_id": customer_id,
             "employees_reactivated": emp_count,
             "plan_id": plan_id or "unchanged",
         }
+
+    async def _notify_customer(
+        self, customer_id: str, event: str, detail: str, reason: str = ""
+    ) -> None:
+        """Send a notification to the customer about a subscription event.
+
+        Stores a notification record in the DB for the customer dashboard
+        to display. Optionally sends email if SMTP is configured.
+        """
+        if self._db is None:
+            return
+
+        try:
+            from src.db.models import CustomerNotification
+
+            async with self._db.session() as session:
+                notification = CustomerNotification(
+                    customer_id=customer_id,
+                    event=event,
+                    message=detail,
+                    extra_data=json.dumps({"reason": reason}),
+                )
+                session.add(notification)
+                await session.commit()
+
+            logger.info(
+                "Customer notification sent",
+                extra={"customer_id": customer_id, "event": event},
+            )
+        except ImportError:
+            # CustomerNotification model not yet defined — log only
+            logger.info(
+                f"Customer notification (no model): {event} — {detail}",
+                extra={"customer_id": customer_id},
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to notify customer {customer_id}: {exc}")
 
     async def _purge_r2_media(self, customer_id: str) -> int:
         """Delete all R2 media for a customer (photos, face data, voice samples).

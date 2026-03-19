@@ -197,7 +197,9 @@ async def get_conversation(request: Request, conversation_id: str) -> JSONRespon
 @router.get("/server")
 async def server_health(request: Request) -> JSONResponse:
     """Server health + render node count."""
-    pipeline = request.app.state.pipeline
+    pipeline = getattr(request.app.state, "pipeline", None)
+    if pipeline is None:
+        return JSONResponse(status_code=503, content={"status": "unavailable", "detail": "Pipeline not initialized"})
     health = await pipeline.health_check()
 
     return JSONResponse(content={

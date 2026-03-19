@@ -14,12 +14,20 @@ from src.utils.logger import setup_logger
 
 logger = setup_logger("ai_agent.approval")
 
-# Action types that require admin approval
+# Action types that require admin approval before execution
 APPROVAL_ACTIONS = {
     "suspend_customer",
     "kill_switch",
     "plan_downgrade",
     "data_deletion",
+}
+
+# Auto-fix IDs that affect global pipeline state or external resources.
+# These bypass the normal auto-fix path and go to the approval queue instead.
+HIGH_IMPACT_FIX_ACTIONS = {
+    "video_disable",            # Disables GPU rendering for ALL customers
+    "text_only_mode",           # Forces text-only mode for ALL customers
+    "db_connection_cleanup",    # Kills PostgreSQL connections
 }
 
 

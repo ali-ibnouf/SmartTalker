@@ -20,6 +20,7 @@ Tables:
 - decision_reviews   Flagged AI decisions for review
 - analytics_snapshots Cached KPI aggregations
 - employees          Digital employee definitions (Phase 2)
+- employee_channels  Channel configs per employee (WhatsApp, Telegram, Widget)
 - employee_knowledge KB Q&A entries per employee
 - employee_learning  Learning queue (pending human review)
 - tool_registry      Custom API tool definitions
@@ -30,6 +31,9 @@ Tables:
 - workflows          Workflow definitions with step sequences
 - workflow_executions Workflow run instances
 - api_cost_records   Per-call cost tracking by service
+- visitor_channel_map Cross-channel visitor identity resolution
+- customer_docs      Auto-generated setup documentation
+- cost_guardian_log   Cost Guardian enforcement audit trail
 """
 
 from __future__ import annotations
@@ -958,4 +962,151 @@ class EmployeeIndustry(Base):
     __table_args__ = (
         Index("idx_ei_employee", "employee_id"),
         Index("idx_ei_industry", "industry_id"),
+    )
+
+
+# =============================================================================
+# Customer Notifications
+# =============================================================================
+
+
+class CustomerNotification(Base):
+    """Notification sent to a customer (freeze, reactivate, etc.)."""
+    __tablename__ = "customer_notifications"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    customer_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    extra_data: Mapped[str] = mapped_column(Text, default="{}")
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_cn_customer", "customer_id"),
+        Index("idx_cn_created", "created_at"),
+    )
+
+
+# =============================================================================
+# Multi-Channel Integration
+# =============================================================================
+
+
+class EmployeeChannel(Base):
+    """Channel configuration per employee (WhatsApp, Telegram, Widget)."""
+    __tablename__ = "employee_channels"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    employee_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("employees.id"), nullable=False
+    )
+    customer_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel_type: Mapped[str] = mapped_column(String(20), nullable=False)  # whatsapp, telegram, widget
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # WhatsApp specific
+    wa_phone_number_id: Mapped[str] = mapped_column(String(50), default="")
+    wa_business_account_id: Mapped[str] = mapped_column(String(50), default="")
+    wa_access_token: Mapped[str] = mapped_column(Text, default="")  # encrypted
+    wa_verify_token: Mapped[str] = mapped_column(String(100), default="")
+    wa_phone_display: Mapped[str] = mapped_column(String(20), default="")  # display number
+
+    # Telegram specific
+    tg_bot_token: Mapped[str] = mapped_column(Text, default="")  # encrypted
+    tg_bot_username: Mapped[str] = mapped_column(String(100), default="")
+
+    # Widget specific
+    widget_domain: Mapped[str] = mapped_column(String(200), default="")
+
+    # QR Code
+    qr_code_url: Mapped[str] = mapped_column(Text, default="")
+    qr_landing_url: Mapped[str] = mapped_column(Text, default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_ec_employee", "employee_id"),
+        Index("idx_ec_customer", "customer_id"),
+        Index("idx_ec_employee_channel", "employee_id", "channel_type", unique=True),
+    )
+
+
+class VisitorChannelMap(Base):
+    """Maps a visitor identity across channels (same person on WhatsApp + Widget)."""
+    __tablename__ = "visitor_channel_map"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    visitor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    channel_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    channel_user_id: Mapped[str] = mapped_column(String(200), nullable=False)  # phone / tg user_id / ws session
+    employee_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("employees.id"), nullable=False
+    )
+    first_seen: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_vcm_channel", "channel_type", "channel_user_id"),
+        Index("idx_vcm_visitor", "visitor_id"),
+        Index(
+            "idx_vcm_channel_user_employee",
+            "channel_type", "channel_user_id", "employee_id",
+            unique=True,
+        ),
+    )
+
+
+class CustomerDoc(Base):
+    """Auto-generated setup documentation per customer per employee."""
+    __tablename__ = "customer_docs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    customer_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    employee_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("employees.id"), nullable=False
+    )
+    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)  # widget_setup, whatsapp_setup, telegram_setup, qr_guide
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    generated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_cd_customer", "customer_id"),
+        Index("idx_cd_employee", "employee_id"),
+        Index(
+            "idx_cd_customer_employee_type",
+            "customer_id", "employee_id", "doc_type",
+            unique=True,
+        ),
+    )
+
+
+# =============================================================================
+# Cost Guardian Log
+# =============================================================================
+
+
+class CostGuardianLog(Base):
+    """Audit trail for Cost Guardian enforcement actions."""
+    __tablename__ = "cost_guardian_log"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    alert_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    service: Mapped[str] = mapped_column(String(100), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    current_value: Mapped[float] = mapped_column(Float, default=0.0)
+    threshold: Mapped[float] = mapped_column(Float, default=0.0)
+    action_taken: Mapped[str] = mapped_column(String(50), default="")
+    result: Mapped[str] = mapped_column(Text, default="{}")
+    customer_id: Mapped[str] = mapped_column(String(100), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_guardian_log_time", "created_at"),
+        Index("idx_guardian_log_level", "alert_level"),
     )

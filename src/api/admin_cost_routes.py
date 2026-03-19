@@ -12,7 +12,7 @@ All endpoints require admin API key auth (via middleware).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request, Query
 
@@ -37,7 +37,7 @@ router = APIRouter(prefix="/api/v1/admin/costs", tags=["admin-costs"])
 
 def _period_bounds(days: int) -> tuple[datetime, datetime]:
     """Return (start, end) datetime bounds for the given period."""
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
     return start, end
 
@@ -48,7 +48,7 @@ async def get_total_costs(
     days: int = Query(30, ge=1, le=365),
 ):
     """Get total platform API costs for the given period."""
-    db = request.app.state.db
+    db = getattr(request.app.state, "db", None)
     if db is None:
         return CostTotalResponse()
 
@@ -77,7 +77,7 @@ async def get_cost_breakdown(
     days: int = Query(30, ge=1, le=365),
 ):
     """Get costs broken down by service (asr, llm, tts, runpod)."""
-    db = request.app.state.db
+    db = getattr(request.app.state, "db", None)
     if db is None:
         return CostBreakdownResponse()
 
@@ -117,7 +117,7 @@ async def get_costs_by_customer(
     days: int = Query(30, ge=1, le=365),
 ):
     """Get costs grouped by customer."""
-    db = request.app.state.db
+    db = getattr(request.app.state, "db", None)
     if db is None:
         return CostByCustomerResponse()
 
@@ -170,7 +170,7 @@ async def get_cost_margin(
     days: int = Query(30, ge=1, le=365),
 ):
     """Get revenue vs. cost margin for the period."""
-    db = request.app.state.db
+    db = getattr(request.app.state, "db", None)
     billing = getattr(request.app.state, "billing", None)
     if db is None:
         return CostMarginResponse()
@@ -215,7 +215,7 @@ async def get_runpod_costs(
     days: int = Query(30, ge=1, le=365),
 ):
     """Get RunPod-specific cost and job metrics."""
-    db = request.app.state.db
+    db = getattr(request.app.state, "db", None)
     if db is None:
         return RunPodCostResponse()
 

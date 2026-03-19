@@ -8,6 +8,7 @@ Run with: uvicorn src.main:app --host 0.0.0.0 --port 8000
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
@@ -32,7 +33,13 @@ from src.api.tool_routes import router as tool_router
 from src.api.workflow_routes import router as workflow_router
 from src.api.learning_routes import router as learning_router
 from src.api.admin_cost_routes import router as admin_cost_router
+from src.api.admin_session_routes import router as admin_session_router
+from src.api.admin_guardian_routes import router as admin_guardian_router
 from src.services.ai_agent.routes import router as agent_router
+from src.api.channel_routes import router as channel_router
+from src.api.webhooks.whatsapp import router as wa_webhook_router
+from src.api.webhooks.telegram import router as tg_webhook_router
+from src.api.webhooks.paddle import router as paddle_webhook_router
 from src.api.schemas import ErrorResponse
 from src.api.websocket import WebSocketManager, websocket_chat_endpoint
 from src.api.operator_ws import OperatorWebSocketManager, operator_websocket_endpoint
@@ -69,6 +76,34 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         Control back to the application during its lifetime.
     """
     # ── Startup ──────────────────────────────────────────────────────────
+
+    # In test mode, skip all real service connections
+    if os.environ.get("TESTING"):
+        if get_settings().app_env == "production":
+            raise ValueError("TESTING flag cannot be set in production environment")
+        logger.info("Test mode — skipping service connections")
+        application.state.config = get_settings()
+        application.state.db = None
+        application.state.redis = None
+        application.state.pipeline = None
+        application.state.billing = None
+        application.state.whatsapp = None
+        application.state.ws_manager = None
+        application.state.operator_manager = None
+        application.state.webrtc_handler = None
+        application.state.supervisor = None
+        application.state.analytics = None
+        application.state.guardrails = None
+        application.state.persona_engine = None
+        application.state.kill_switch = None
+        application.state.ai_agent = None
+        application.state.learning_analytics = None
+        application.state.learning_engine = None
+        application.state.storage = None
+        application.state.cost_guardian = None
+        yield
+        return
+
     logger.info("SmartTalker starting up...")
 
     config = get_settings()
@@ -219,6 +254,12 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning(f"PersonaEngine failed to load: {exc}")
     application.state.persona_engine = persona_engine
 
+    # Initialize Auto-Learning Engine
+    from src.pipeline.auto_learning import AutoLearningEngine
+    learning_engine = AutoLearningEngine(db=db, config=config)
+    application.state.learning_engine = learning_engine
+    logger.info("AutoLearningEngine loaded")
+
     # Initialize Kill Switch
     kill_switch = KillSwitch(db=db, redis=redis_client, ws_manager=ws_manager)
     application.state.kill_switch = kill_switch
@@ -243,6 +284,18 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("AI Optimization Agent started")
     application.state.ai_agent = ai_agent
 
+    # Initialize Cost Guardian
+    from src.services.cost_guardian import CostGuardian
+    cost_guardian = CostGuardian(
+        db=db,
+        redis=redis_client,
+        resend_api_key=config.resend_api_key,
+        runpod_client=getattr(pipeline, "_runpod", None),
+    )
+    guardian_task = asyncio.create_task(cost_guardian.start())
+    application.state.cost_guardian = cost_guardian
+    logger.info("Cost Guardian started")
+
     # Initialize storage manager and schedule periodic cleanup
     storage = StorageManager(config)
     application.state.storage = storage
@@ -264,6 +317,27 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
     cleanup_task = asyncio.create_task(_periodic_cleanup())
 
+    # Weekly Cross-Learning CRON Task — runs every 7 days
+    async def _weekly_cross_learning():
+        import asyncio as _asyncio
+        while True:
+            # Sleep 7 days (604800 seconds)
+            await _asyncio.sleep(604800)
+            if db:
+                try:
+                    from src.agent.cross_learning import CrossLearningEngine
+                    cross_learning = CrossLearningEngine(db)
+                    
+                    # While the seed logic runs on startup, a future generalization engine
+                    # processing phase could be hooked here for dynamic insights extraction.
+                    # Currently, we trigger a stats log to ensure the cycle proves active.
+                    stats = await cross_learning.get_stats()
+                    logger.info("Weekly Cross-Learning Cycle Executed", extra={"stats": stats})
+                except Exception as exc:
+                    logger.warning(f"Cross-learning CRON cycle failed: {exc}")
+
+    cross_learning_task = asyncio.create_task(_weekly_cross_learning())
+
     logger.info(
         "SmartTalker ready",
         extra={"host": config.api_host, "port": config.api_port},
@@ -274,12 +348,17 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     # ── Shutdown ─────────────────────────────────────────────────────────
     logger.info("SmartTalker shutting down...")
     cleanup_task.cancel()
+    cross_learning_task.cancel()
+    guardian_task.cancel()
     try:
         await cleanup_task
+        await cross_learning_task
+        await guardian_task
     except asyncio.CancelledError:
         pass
-    
-    # Stop AI Agent
+
+    # Stop Cost Guardian + AI Agent
+    await cost_guardian.stop()
     await ai_agent.stop()
 
     # Unload engines
@@ -290,6 +369,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         await pipeline._guardrails.unload()
         
     await billing.unload()
+    await learning_engine.close()
     await persona_engine.unload()
     await pipeline.unload_all()
     await whatsapp.close()
@@ -343,7 +423,13 @@ def create_app() -> FastAPI:
     application.include_router(workflow_router)
     application.include_router(learning_router)
     application.include_router(admin_cost_router)
+    application.include_router(admin_session_router)
+    application.include_router(admin_guardian_router)
     application.include_router(agent_router)
+    application.include_router(channel_router)
+    application.include_router(wa_webhook_router)
+    application.include_router(tg_webhook_router)
+    application.include_router(paddle_webhook_router)
 
     # ── WebSocket Endpoint ───────────────────────────────────────────────
     @application.websocket("/ws/chat")

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import functools
+
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -350,19 +350,14 @@ class SmartTalkerPipeline:
         # ── Body State Selection ──────────────────────────────────────────
         body_state = self._select_body_state(response_text, emotion)
 
-        # ── TTS (runs on CPU in thread pool to avoid blocking) ────────────
+        # ── TTS (async DashScope WebSocket) ─────────────────────────────
         voice_ref = self._resolve_voice_ref(voice_id)
-        loop = asyncio.get_running_loop()
         with INFERENCE_LATENCY.labels(model_type="tts").time():
-            tts_result = await loop.run_in_executor(
-                None,
-                functools.partial(
-                    self._tts.synthesize,
-                    text=response_text,
-                    voice_ref=voice_ref,
-                    emotion=emotion,
-                    language=language,
-                ),
+            tts_result = await self._tts.synthesize(
+                text=response_text,
+                voice_id=voice_ref,
+                emotion=emotion,
+                language=language,
             )
         breakdown["tts_ms"] = tts_result.latency_ms
 
@@ -422,12 +417,9 @@ class SmartTalkerPipeline:
         escalated = False
         escalation_id: Optional[str] = None
 
-        # ── ASR (runs on CPU in thread pool) ──────────────────────────────
-        loop = asyncio.get_running_loop()
+        # ── ASR (async DashScope WebSocket) ──────────────────────────────
         with INFERENCE_LATENCY.labels(model_type="asr").time():
-            asr_result = await loop.run_in_executor(
-                None, functools.partial(self._asr.transcribe, audio_path)
-            )
+            asr_result = await self._asr.transcribe(audio_path)
         breakdown["asr_ms"] = asr_result.latency_ms
         detected_lang = asr_result.language if asr_result.language != "unknown" else language
 
@@ -508,17 +500,13 @@ class SmartTalkerPipeline:
         # ── Body State Selection ──────────────────────────────────────────
         body_state = self._select_body_state(response_text, emotion)
 
-        # ── TTS (runs on CPU in thread pool) ──────────────────────────────
+        # ── TTS (async DashScope WebSocket) ──────────────────────────────
         voice_ref = self._resolve_voice_ref(voice_id)
-        tts_result = await loop.run_in_executor(
-            None,
-            functools.partial(
-                self._tts.synthesize,
-                text=response_text,
-                voice_ref=voice_ref,
-                emotion=emotion,
-                language=detected_lang,
-            ),
+        tts_result = await self._tts.synthesize(
+            text=response_text,
+            voice_id=voice_ref,
+            emotion=emotion,
+            language=detected_lang,
         )
         breakdown["tts_ms"] = tts_result.latency_ms
 
@@ -624,19 +612,18 @@ class SmartTalkerPipeline:
 
         # 3. Stream TTS chunks
         voice_ref = self._resolve_voice_ref(voice_id)
-        loop = asyncio.get_running_loop()
         total_audio_ms = 0
 
-        # Run TTS streaming in thread pool (CPU-bound)
-        chunks = await loop.run_in_executor(
-            None,
-            lambda: list(self._tts.synthesize_stream(
-                text=llm_result.text,
-                voice_ref=voice_ref,
-                emotion=emotion,
-                language=language,
-            )),
+        # Collect TTS stream chunks (async DashScope WebSocket)
+        tts_stream = await self._tts.synthesize_stream(
+            text=llm_result.text,
+            voice_id=voice_ref,
+            emotion=emotion,
+            language=language,
         )
+        chunks = []
+        async for chunk in tts_stream:
+            chunks.append(chunk)
 
         # Split response text roughly across chunks for viseme extraction
         words = llm_result.text.split()
@@ -701,11 +688,8 @@ class SmartTalkerPipeline:
         Yields:
             StreamChunk objects in protocol order.
         """
-        # ASR transcription first
-        loop = asyncio.get_running_loop()
-        asr_result = await loop.run_in_executor(
-            None, functools.partial(self._asr.transcribe, audio_path)
-        )
+        # ASR transcription (async DashScope WebSocket)
+        asr_result = await self._asr.transcribe(audio_path)
         detected_lang = asr_result.language if asr_result.language != "unknown" else language
 
         # Delegate to text streaming pipeline
@@ -723,11 +707,11 @@ class SmartTalkerPipeline:
     # Public API (used by routes — no private member access)
     # ═════════════════════════════════════════════════════════════════════
 
-    def clone_voice(self, reference_audio: str, voice_name: str) -> str:
+    async def clone_voice(self, reference_audio: str, voice_name: str) -> str:
         """Register a new cloned voice from reference audio."""
-        return self._tts.clone_voice(
-            reference_audio=reference_audio,
-            voice_name=voice_name,
+        return await self._tts.clone_voice(
+            audio_url=reference_audio,
+            prefix=voice_name,
         )
 
     def list_voices(self) -> list[VoiceInfo]:
@@ -821,12 +805,12 @@ class SmartTalkerPipeline:
         logger.info("Unloading all pipeline models...")
 
         self._asr.unload()
-        self._tts.unload()
+        await self._tts.unload()
         self._emotion.unload()
         await self._llm.close()
 
         if self._kb is not None:
-            self._kb.unload()
+            await self._kb.unload()
         if self._training is not None:
             await self._training.unload()
         if self._guardrails is not None:

@@ -178,7 +178,7 @@ class FailedPaymentRule:
                 result = await session.execute(stmt)
                 for row in result.all():
                     cid, cname, plan, failures = row
-                    severity = "critical" if failures >= 3 else "warning"
+                    severity = "critical" if failures >= threshold * 2 else "warning"
                     detections.append(Detection(
                         rule_id=self.rule_id,
                         severity=severity,

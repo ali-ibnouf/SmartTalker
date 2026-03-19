@@ -44,12 +44,13 @@ class TestKBEngine:
             assert engine.is_loaded
             mock_client.get_or_create_collection.assert_called_once()
 
-    def test_unload(self, config):
+    @pytest.mark.asyncio
+    async def test_unload(self, config):
         """unload() resets state."""
         from src.pipeline.knowledge_base import KnowledgeBaseEngine
         engine = KnowledgeBaseEngine(config)
         engine._loaded = True
-        engine.unload()
+        await engine.unload()
         assert not engine.is_loaded
 
     @pytest.mark.asyncio

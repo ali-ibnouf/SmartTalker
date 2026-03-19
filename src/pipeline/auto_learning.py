@@ -1,11 +1,11 @@
-"""Automatic learning engine for extracting Q&A knowledge from conversations.
+"""Automatic learning engine for extracting knowledge from conversations.
 
 After a visitor session ends, this engine analyses the conversation transcript
-using Qwen3-max to extract question-answer pairs.  High-confidence pairs are
-auto-approved into EmployeeKnowledge; medium-confidence pairs are queued in
-EmployeeLearning for human review; low-confidence pairs are discarded.
+using Qwen3-max to extract:
+1. Q&A pairs — reusable knowledge for the employee's knowledge base
+2. Visitor memories — personal facts/preferences for returning-visitor context
 
-Confidence thresholds:
+Q&A confidence thresholds:
 - >= 0.85  -> auto-create EmployeeKnowledge (approved=True)
 - 0.5-0.84 -> create EmployeeLearning (status="pending", learning_type="qa_pair")
 - < 0.5   -> discard
@@ -26,6 +26,7 @@ from src.db.models import (
     ConversationMessage,
     EmployeeKnowledge,
     EmployeeLearning,
+    VisitorMemory,
     _uuid,
 )
 from src.utils.logger import log_with_latency, setup_logger
@@ -57,6 +58,26 @@ _EXTRACTION_SYSTEM_PROMPT = (
     '  - "confidence": number (0.0 to 1.0)\n'
     '  - "category": string\n\n'
     "If no useful pairs can be extracted, return {\"pairs\": []}.\n"
+    "Do NOT include any text outside the JSON object."
+)
+
+# System prompt for visitor memory extraction
+_MEMORY_SYSTEM_PROMPT = (
+    "You are an expert at analysing customer-service conversation transcripts. "
+    "Your task is to extract notable personal information about the visitor that "
+    "would be useful to remember for future conversations.\n\n"
+    "Rules:\n"
+    "1. Only extract factual, specific information the visitor shared.\n"
+    "2. Ignore generic or trivial details.\n"
+    "3. Assign a type: preference, fact, issue, purchase, complaint, or note.\n"
+    "4. Assign an importance score (0.0-1.0) reflecting how useful it would be "
+    "   to recall this in a future conversation.\n\n"
+    "Return a JSON object with a single key \"memories\" whose value is an array "
+    "of objects. Each object must have exactly these keys:\n"
+    '  - "type": string (one of: preference, fact, issue, purchase, complaint, note)\n'
+    '  - "content": string (concise description of the memory)\n'
+    '  - "importance": number (0.0 to 1.0)\n\n'
+    "If nothing notable was shared, return {\"memories\": []}.\n"
     "Do NOT include any text outside the JSON object."
 )
 
@@ -100,16 +121,18 @@ class AutoLearningEngine:
         session_id: str,
         employee_id: str,
         customer_id: str,
+        visitor_id: str = "",
     ) -> None:
-        """Analyse a completed session and extract knowledge.
+        """Analyse a completed session and extract knowledge + visitor memories.
 
         Loads conversation messages, builds a transcript, calls the LLM to
-        extract Q&A pairs, and persists results based on confidence scores.
+        extract Q&A pairs and visitor memories, then persists results.
 
         Args:
             session_id: Conversation ID to process.
             employee_id: Employee who handled the session.
             customer_id: Customer that owns the employee.
+            visitor_id: Visitor who participated (for memory storage).
         """
         start = time.perf_counter()
         logger.info(
@@ -127,6 +150,7 @@ class AutoLearningEngine:
             return
 
         # 2. Extract Q&A pairs via LLM
+        pairs: list[dict[str, Any]] = []
         try:
             pairs = await self._extract_qa_pairs(transcript)
         except Exception as exc:
@@ -134,19 +158,30 @@ class AutoLearningEngine:
                 "Q&A extraction failed",
                 extra={"session_id": session_id, "error": str(exc)},
             )
-            return
 
-        if not pairs:
+        # 3. Extract visitor memories via LLM (independent of Q&A success)
+        memories: list[dict[str, Any]] = []
+        if visitor_id:
+            try:
+                memories = await self._extract_visitor_memories(transcript)
+            except Exception as exc:
+                logger.error(
+                    "Visitor memory extraction failed",
+                    extra={"session_id": session_id, "error": str(exc)},
+                )
+
+        if not pairs and not memories:
             logger.info(
-                "No Q&A pairs extracted from session",
+                "No Q&A pairs or memories extracted from session",
                 extra={"session_id": session_id},
             )
             return
 
-        # 3. Persist pairs according to confidence thresholds
+        # 4. Persist pairs according to confidence thresholds
         auto_approved = 0
         pending_review = 0
         discarded = 0
+        memories_saved = 0
 
         async with self._db.session() as session:
             for pair in pairs:
@@ -198,6 +233,29 @@ class AutoLearningEngine:
                 else:
                     discarded += 1
 
+            # 5. Persist visitor memories
+            for mem in memories:
+                mem_type = str(mem.get("type", "note")).strip()
+                content = str(mem.get("content", "")).strip()
+                importance = float(mem.get("importance", 0.5))
+
+                if not content:
+                    continue
+                if mem_type not in ("preference", "fact", "issue", "purchase", "complaint", "note"):
+                    mem_type = "note"
+
+                visitor_mem = VisitorMemory(
+                    id=_uuid(),
+                    visitor_id=visitor_id,
+                    employee_id=employee_id,
+                    memory_type=mem_type,
+                    content=content,
+                    source_session=session_id,
+                    importance=importance,
+                )
+                session.add(visitor_mem)
+                memories_saved += 1
+
             await session.commit()
 
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -211,6 +269,7 @@ class AutoLearningEngine:
                 "auto_approved": auto_approved,
                 "pending_review": pending_review,
                 "discarded": discarded,
+                "memories_saved": memories_saved,
             },
         )
 
@@ -309,6 +368,63 @@ class AutoLearningEngine:
             return []
 
         return pairs
+
+    async def _extract_visitor_memories(self, transcript: str) -> list[dict[str, Any]]:
+        """Call Qwen3-max to extract visitor memories from a transcript.
+
+        Args:
+            transcript: Plain-text conversation transcript.
+
+        Returns:
+            List of dicts with keys: type, content, importance.
+        """
+        messages = [
+            {"role": "system", "content": _MEMORY_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    "Extract notable visitor information from this conversation:\n\n"
+                    f"{transcript}"
+                ),
+            },
+        ]
+
+        payload = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": 0.3,
+            "max_tokens": 500,
+            "response_format": {"type": "json_object"},
+        }
+
+        response = await self._client.post("/chat/completions", json=payload)
+        response.raise_for_status()
+
+        data = response.json()
+        content = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        if not content:
+            return []
+
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            logger.error(
+                "Failed to parse LLM memory extraction response",
+                extra={"raw_content": content[:500], "error": str(exc)},
+            )
+            return []
+
+        memories = parsed.get("memories", [])
+        if not isinstance(memories, list):
+            return []
+
+        return memories
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 

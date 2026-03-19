@@ -290,6 +290,7 @@ class RunPodServerless:
 
         # Poll for completion
         status_url = f"{endpoint}/status/{job_id}"
+        poll_failures = 0
         while True:
             elapsed = time.perf_counter() - start
             if elapsed > timeout:
@@ -302,19 +303,33 @@ class RunPodServerless:
             await asyncio.sleep(POLL_INTERVAL)
 
             try:
-                status_resp = await client.get(status_url)
+                status_resp = await client.get(status_url, timeout=10.0)
                 status_resp.raise_for_status()
                 status_data = status_resp.json()
-            except Exception:
-                continue  # Retry on transient errors
+            except Exception as poll_exc:
+                poll_failures += 1
+                if poll_failures >= 10:
+                    raise RunPodError(
+                        message=f"RunPod polling failed {poll_failures} consecutive times",
+                        detail=f"job_id={job_id}, last_error={poll_exc}",
+                    )
+                logger.debug(f"RunPod poll transient error (attempt {poll_failures}): {poll_exc}")
+                continue
 
+            poll_failures = 0  # Reset on successful poll
             status = status_data.get("status", "")
 
             if status == "COMPLETED":
                 output = status_data.get("output", {})
-                execution_ms = int((time.perf_counter() - start) * 1000)
+                wall_clock_ms = int((time.perf_counter() - start) * 1000)
+                # Prefer RunPod-reported GPU execution time over wall-clock time
+                gpu_exec_ms = status_data.get("executionTime")
+                if gpu_exec_ms is not None:
+                    execution_ms = int(gpu_exec_ms)
+                else:
+                    execution_ms = wall_clock_ms
                 execution_s = execution_ms / 1000.0
-                output["execution_time_ms"] = execution_ms
+                output.setdefault("execution_time_ms", execution_ms)
                 output["job_id"] = job_id
 
                 # Record metrics per task type

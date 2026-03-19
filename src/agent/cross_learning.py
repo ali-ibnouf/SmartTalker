@@ -2,37 +2,62 @@
 
 Allows employees to adopt industry-specific knowledge templates.
 When an employee joins an industry, its default Q&A pairs are copied
-into EmployeeKnowledge (approved=True). Admin can view cross-learning
-stats across industries.
+into EmployeeKnowledge (approved=True).
 
-15 seed industries are pre-defined with default Q&A pairs.
+Level 3 additions:
+- ``generalize_qa()``: uses qwen3-max to remove company-specific details
+  from high-performing Q&A pairs.
+- ``weekly_cross_learning_cycle()``: finds Q&A with success_rate > 0.8
+  and times_used > 5, generalizes them, distributes to same-industry
+  employees as "pending" learning items.
+
+15 seed industries with Arabic names.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Optional
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
+from sqlalchemy import and_, func, select
 
 from src.db.models import (
     Employee,
     EmployeeIndustry,
     EmployeeKnowledge,
+    EmployeeLearning,
     IndustryCategory,
 )
 from src.utils.logger import setup_logger
 
 logger = setup_logger("agent.cross_learning")
 
+# Thresholds for cross-learning cycle
+_MIN_SUCCESS_RATE = 0.8
+_MIN_TIMES_USED = 5
+
+# System prompt for Q&A generalization
+_GENERALIZE_SYSTEM_PROMPT = (
+    "You remove company-specific details from a Q&A pair so it becomes a "
+    "generic industry template. Replace brand names, addresses, phone numbers, "
+    "specific prices, and proprietary details with placeholders like "
+    "[Company Name], [Phone Number], [Price], etc.\n\n"
+    "Return a JSON object with exactly two keys:\n"
+    '  - "question": the generalized question\n'
+    '  - "answer": the generalized answer\n\n'
+    "Keep the tone and structure. Do NOT add new information.\n"
+    "Do NOT include any text outside the JSON object."
+)
+
 # ── 15 Seed Industries ──────────────────────────────────────────────────
 
 SEED_INDUSTRIES: list[dict[str, Any]] = [
     {
-        "slug": "retail",
-        "name": "Retail & E-commerce",
-        "description": "Online and physical retail stores",
+        "slug": "ecommerce",
+        "name": "E-commerce",
+        "name_ar": "التجارة الإلكترونية",
+        "description": "Online retail and e-commerce platforms",
         "default_qa_pairs": [
             {"q": "What are your return policies?", "a": "We accept returns within 30 days of purchase with a valid receipt."},
             {"q": "Do you offer free shipping?", "a": "We offer free shipping on orders over $50."},
@@ -41,30 +66,9 @@ SEED_INDUSTRIES: list[dict[str, Any]] = [
         "default_personality": {"tone": "friendly", "style": "helpful"},
     },
     {
-        "slug": "healthcare",
-        "name": "Healthcare & Medical",
-        "description": "Hospitals, clinics, and medical practices",
-        "default_qa_pairs": [
-            {"q": "How do I book an appointment?", "a": "You can book online through our portal or call us during business hours."},
-            {"q": "Do you accept insurance?", "a": "Yes, we accept most major insurance providers. Please contact us for specifics."},
-            {"q": "What are your emergency hours?", "a": "Our emergency department is open 24/7."},
-        ],
-        "default_personality": {"tone": "professional", "style": "empathetic"},
-    },
-    {
-        "slug": "hospitality",
-        "name": "Hospitality & Hotels",
-        "description": "Hotels, resorts, and travel accommodation",
-        "default_qa_pairs": [
-            {"q": "What time is check-in?", "a": "Check-in is at 3:00 PM and check-out is at 11:00 AM."},
-            {"q": "Do you have room service?", "a": "Yes, room service is available 24 hours a day."},
-            {"q": "Is WiFi free?", "a": "Complimentary high-speed WiFi is available throughout the property."},
-        ],
-        "default_personality": {"tone": "warm", "style": "welcoming"},
-    },
-    {
         "slug": "banking",
-        "name": "Banking & Finance",
+        "name": "Banking",
+        "name_ar": "البنوك",
         "description": "Banks, credit unions, and financial services",
         "default_qa_pairs": [
             {"q": "How do I open an account?", "a": "You can open an account online or visit any branch with a valid ID."},
@@ -74,63 +78,21 @@ SEED_INDUSTRIES: list[dict[str, Any]] = [
         "default_personality": {"tone": "formal", "style": "trustworthy"},
     },
     {
-        "slug": "education",
-        "name": "Education & Training",
-        "description": "Schools, universities, and online learning",
+        "slug": "healthcare",
+        "name": "Healthcare",
+        "name_ar": "الرعاية الصحية",
+        "description": "Hospitals, clinics, and medical practices",
         "default_qa_pairs": [
-            {"q": "How do I enroll?", "a": "Visit our admissions page to start the enrollment process."},
-            {"q": "What courses do you offer?", "a": "We offer a wide range of courses. Browse our catalog for the full list."},
-            {"q": "Are there scholarships available?", "a": "Yes, we offer merit-based and need-based scholarships. Check our financial aid page."},
+            {"q": "How do I book an appointment?", "a": "You can book online through our portal or call us during business hours."},
+            {"q": "Do you accept insurance?", "a": "Yes, we accept most major insurance providers. Please contact us for specifics."},
+            {"q": "What are your emergency hours?", "a": "Our emergency department is open 24/7."},
         ],
-        "default_personality": {"tone": "encouraging", "style": "informative"},
-    },
-    {
-        "slug": "real_estate",
-        "name": "Real Estate",
-        "description": "Property sales, rentals, and management",
-        "default_qa_pairs": [
-            {"q": "How do I schedule a viewing?", "a": "Contact us to schedule a property viewing at your convenience."},
-            {"q": "What documents do I need to rent?", "a": "You'll need a valid ID, proof of income, and references."},
-            {"q": "Do you handle property management?", "a": "Yes, we offer full property management services for landlords."},
-        ],
-        "default_personality": {"tone": "professional", "style": "knowledgeable"},
-    },
-    {
-        "slug": "restaurants",
-        "name": "Restaurants & Food Service",
-        "description": "Restaurants, cafes, and catering",
-        "default_qa_pairs": [
-            {"q": "Can I make a reservation?", "a": "Yes, you can reserve a table online or by calling us."},
-            {"q": "Do you cater for dietary restrictions?", "a": "We offer vegetarian, vegan, and gluten-free options."},
-            {"q": "Do you offer delivery?", "a": "Yes, we deliver through our website and major delivery platforms."},
-        ],
-        "default_personality": {"tone": "friendly", "style": "casual"},
-    },
-    {
-        "slug": "automotive",
-        "name": "Automotive & Dealerships",
-        "description": "Car dealerships, repair shops, and auto services",
-        "default_qa_pairs": [
-            {"q": "Can I schedule a test drive?", "a": "Absolutely! Book a test drive online or visit our showroom."},
-            {"q": "Do you offer financing?", "a": "Yes, we offer competitive financing options with flexible terms."},
-            {"q": "How do I book a service appointment?", "a": "Schedule service online or call our service department."},
-        ],
-        "default_personality": {"tone": "enthusiastic", "style": "consultative"},
-    },
-    {
-        "slug": "insurance",
-        "name": "Insurance",
-        "description": "Health, auto, home, and life insurance",
-        "default_qa_pairs": [
-            {"q": "How do I file a claim?", "a": "File a claim online through your account portal or call our claims department."},
-            {"q": "What does my policy cover?", "a": "Coverage details are in your policy documents. Contact us for a detailed review."},
-            {"q": "How do I get a quote?", "a": "Get an instant quote online or speak with one of our agents."},
-        ],
-        "default_personality": {"tone": "reassuring", "style": "clear"},
+        "default_personality": {"tone": "professional", "style": "empathetic"},
     },
     {
         "slug": "telecom",
-        "name": "Telecommunications",
+        "name": "Telecom",
+        "name_ar": "الاتصالات",
         "description": "Internet, mobile, and phone services",
         "default_qa_pairs": [
             {"q": "What plans do you offer?", "a": "We offer a range of plans for mobile, internet, and bundled services."},
@@ -140,19 +102,45 @@ SEED_INDUSTRIES: list[dict[str, Any]] = [
         "default_personality": {"tone": "helpful", "style": "technical"},
     },
     {
-        "slug": "legal",
-        "name": "Legal Services",
-        "description": "Law firms, legal consultancy, and notary",
+        "slug": "real_estate",
+        "name": "Real Estate",
+        "name_ar": "العقارات",
+        "description": "Property sales, rentals, and management",
         "default_qa_pairs": [
-            {"q": "How do I schedule a consultation?", "a": "Book a consultation through our website or call our office."},
-            {"q": "What areas of law do you practice?", "a": "We practice corporate, family, immigration, and real estate law."},
-            {"q": "What are your fees?", "a": "Fees vary by case type. We offer a free initial consultation to discuss your needs."},
+            {"q": "How do I schedule a viewing?", "a": "Contact us to schedule a property viewing at your convenience."},
+            {"q": "What documents do I need to rent?", "a": "You'll need a valid ID, proof of income, and references."},
+            {"q": "Do you handle property management?", "a": "Yes, we offer full property management services for landlords."},
         ],
-        "default_personality": {"tone": "formal", "style": "precise"},
+        "default_personality": {"tone": "professional", "style": "knowledgeable"},
+    },
+    {
+        "slug": "education",
+        "name": "Education",
+        "name_ar": "التعليم",
+        "description": "Schools, universities, and online learning",
+        "default_qa_pairs": [
+            {"q": "How do I enroll?", "a": "Visit our admissions page to start the enrollment process."},
+            {"q": "What courses do you offer?", "a": "We offer a wide range of courses. Browse our catalog for the full list."},
+            {"q": "Are there scholarships available?", "a": "Yes, we offer merit-based and need-based scholarships. Check our financial aid page."},
+        ],
+        "default_personality": {"tone": "encouraging", "style": "informative"},
+    },
+    {
+        "slug": "travel",
+        "name": "Travel",
+        "name_ar": "السفر والسياحة",
+        "description": "Hotels, travel agencies, and tourism",
+        "default_qa_pairs": [
+            {"q": "What time is check-in?", "a": "Check-in is at 3:00 PM and check-out is at 11:00 AM."},
+            {"q": "Do you have room service?", "a": "Yes, room service is available 24 hours a day."},
+            {"q": "Is WiFi free?", "a": "Complimentary high-speed WiFi is available throughout the property."},
+        ],
+        "default_personality": {"tone": "warm", "style": "welcoming"},
     },
     {
         "slug": "government",
-        "name": "Government & Public Services",
+        "name": "Government",
+        "name_ar": "الخدمات الحكومية",
         "description": "Municipal services, permits, and public offices",
         "default_qa_pairs": [
             {"q": "How do I apply for a permit?", "a": "Applications are accepted online or in person at our office."},
@@ -162,19 +150,45 @@ SEED_INDUSTRIES: list[dict[str, Any]] = [
         "default_personality": {"tone": "formal", "style": "informative"},
     },
     {
-        "slug": "fitness",
-        "name": "Fitness & Wellness",
-        "description": "Gyms, spas, and wellness centers",
+        "slug": "automotive",
+        "name": "Automotive",
+        "name_ar": "السيارات",
+        "description": "Car dealerships, repair shops, and auto services",
         "default_qa_pairs": [
-            {"q": "What are your membership plans?", "a": "We offer monthly, quarterly, and annual memberships with various tiers."},
-            {"q": "Do you offer personal training?", "a": "Yes, certified personal trainers are available for one-on-one sessions."},
-            {"q": "What are your operating hours?", "a": "We're open from 6 AM to 11 PM, seven days a week."},
+            {"q": "Can I schedule a test drive?", "a": "Absolutely! Book a test drive online or visit our showroom."},
+            {"q": "Do you offer financing?", "a": "Yes, we offer competitive financing options with flexible terms."},
+            {"q": "How do I book a service appointment?", "a": "Schedule service online or call our service department."},
         ],
-        "default_personality": {"tone": "energetic", "style": "motivating"},
+        "default_personality": {"tone": "enthusiastic", "style": "consultative"},
+    },
+    {
+        "slug": "food",
+        "name": "Food & Restaurants",
+        "name_ar": "المطاعم والأغذية",
+        "description": "Restaurants, cafes, and food services",
+        "default_qa_pairs": [
+            {"q": "Can I make a reservation?", "a": "Yes, you can reserve a table online or by calling us."},
+            {"q": "Do you cater for dietary restrictions?", "a": "We offer vegetarian, vegan, and gluten-free options."},
+            {"q": "Do you offer delivery?", "a": "Yes, we deliver through our website and major delivery platforms."},
+        ],
+        "default_personality": {"tone": "friendly", "style": "casual"},
+    },
+    {
+        "slug": "legal",
+        "name": "Legal",
+        "name_ar": "الخدمات القانونية",
+        "description": "Law firms, legal consultancy, and notary",
+        "default_qa_pairs": [
+            {"q": "How do I schedule a consultation?", "a": "Book a consultation through our website or call our office."},
+            {"q": "What areas of law do you practice?", "a": "We practice corporate, family, immigration, and real estate law."},
+            {"q": "What are your fees?", "a": "Fees vary by case type. We offer a free initial consultation to discuss your needs."},
+        ],
+        "default_personality": {"tone": "formal", "style": "precise"},
     },
     {
         "slug": "logistics",
-        "name": "Logistics & Shipping",
+        "name": "Logistics",
+        "name_ar": "الخدمات اللوجستية",
         "description": "Freight, courier, and supply chain services",
         "default_qa_pairs": [
             {"q": "How do I track a shipment?", "a": "Enter your tracking number on our website or app for real-time updates."},
@@ -184,9 +198,22 @@ SEED_INDUSTRIES: list[dict[str, Any]] = [
         "default_personality": {"tone": "efficient", "style": "clear"},
     },
     {
-        "slug": "saas",
-        "name": "SaaS & Technology",
-        "description": "Software-as-a-service and tech companies",
+        "slug": "hr",
+        "name": "HR & Recruitment",
+        "name_ar": "الموارد البشرية",
+        "description": "Human resources, staffing, and recruitment agencies",
+        "default_qa_pairs": [
+            {"q": "How do I apply for a position?", "a": "Submit your application through our careers portal with your CV."},
+            {"q": "What benefits do you offer?", "a": "We offer health insurance, paid time off, and professional development opportunities."},
+            {"q": "How long does the hiring process take?", "a": "Typically 2-4 weeks from application to offer, depending on the role."},
+        ],
+        "default_personality": {"tone": "professional", "style": "supportive"},
+    },
+    {
+        "slug": "technology",
+        "name": "Technology",
+        "name_ar": "التكنولوجيا",
+        "description": "Software, SaaS, and tech companies",
         "default_qa_pairs": [
             {"q": "Do you offer a free trial?", "a": "Yes, we offer a 14-day free trial with full access to all features."},
             {"q": "How do I integrate with my existing tools?", "a": "We offer REST APIs and native integrations with popular platforms."},
@@ -194,14 +221,56 @@ SEED_INDUSTRIES: list[dict[str, Any]] = [
         ],
         "default_personality": {"tone": "professional", "style": "technical"},
     },
+    {
+        "slug": "nonprofit",
+        "name": "Nonprofit",
+        "name_ar": "المنظمات غير الربحية",
+        "description": "Charities, NGOs, and nonprofit organizations",
+        "default_qa_pairs": [
+            {"q": "How can I donate?", "a": "You can donate online through our website, by bank transfer, or in person."},
+            {"q": "How do I volunteer?", "a": "Visit our volunteer page to see current opportunities and sign up."},
+            {"q": "Where does the money go?", "a": "Our annual report details how every dollar is allocated to our programs."},
+        ],
+        "default_personality": {"tone": "grateful", "style": "transparent"},
+    },
 ]
 
 
 class CrossLearningEngine:
-    """Manages industry-based knowledge sharing across employees."""
+    """Manages industry-based knowledge sharing across employees.
 
-    def __init__(self, db: Any):
+    Level 3 features:
+    - ``generalize_qa()``: LLM-based removal of company-specific details
+    - ``weekly_cross_learning_cycle()``: find high-performing Q&A, generalize,
+      distribute to same-industry employees as pending learning items
+    """
+
+    def __init__(self, db: Any, config: Any = None):
         self._db = db
+        self._config = config
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_llm_client(self) -> httpx.AsyncClient:
+        """Lazy-init the LLM client."""
+        if self._client is None:
+            if self._config is None:
+                from src.config import get_settings
+                self._config = get_settings()
+            api_key = getattr(self._config, "llm_api_key", "") or getattr(self._config, "dashscope_api_key", "")
+            self._client = httpx.AsyncClient(
+                base_url=self._config.llm_base_url,
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.close()
 
     async def seed_industries(self) -> int:
         """Insert seed industries if not already present. Returns count inserted."""
@@ -220,7 +289,7 @@ class CrossLearningEngine:
                 record = IndustryCategory(
                     slug=ind["slug"],
                     name=ind["name"],
-                    description=ind["description"],
+                    description=ind.get("name_ar", "") + " — " + ind["description"],
                     default_qa_pairs=json.dumps(ind["default_qa_pairs"]),
                     default_personality=json.dumps(ind["default_personality"]),
                 )
@@ -369,3 +438,185 @@ class CrossLearningEngine:
                     for ind in industries
                 ],
             }
+
+    # ── Level 3: Generalize + Distribute ─────────────────────────────────
+
+    async def generalize_qa(self, question: str, answer: str) -> dict:
+        """Use qwen3-max to remove company-specific details from a Q&A pair.
+
+        Args:
+            question: The original question.
+            answer: The original answer.
+
+        Returns:
+            Dict with "question" and "answer" keys (generalized).
+        """
+        client = self._get_llm_client()
+        model = getattr(self._config, "llm_model_name", "qwen3-max")
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": _GENERALIZE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Question: {question}\n"
+                        f"Answer: {answer}"
+                    ),
+                },
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+
+        response = await client.post("/chat/completions", json=payload)
+        response.raise_for_status()
+
+        data = response.json()
+        content = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        if not content:
+            return {"question": question, "answer": answer}
+
+        try:
+            parsed = json.loads(content)
+            return {
+                "question": parsed.get("question", question),
+                "answer": parsed.get("answer", answer),
+            }
+        except json.JSONDecodeError:
+            logger.warning("LLM returned invalid JSON for generalization")
+            return {"question": question, "answer": answer}
+
+    async def weekly_cross_learning_cycle(self) -> dict:
+        """Find high-performing Q&A, generalize, distribute to same-industry employees.
+
+        Criteria: success_rate > 0.8 AND times_used > 5.
+        Generalized pairs are added as EmployeeLearning (status="pending")
+        to other employees in the same industry.
+
+        Returns:
+            Summary dict with counts.
+        """
+        if self._db is None:
+            return {"error": "Database not available"}
+
+        generalized = 0
+        distributed = 0
+
+        async with self._db.session() as session:
+            # Find high-performing Q&A pairs
+            high_perf = await session.execute(
+                select(EmployeeKnowledge).where(
+                    and_(
+                        EmployeeKnowledge.approved == True,  # noqa: E712
+                        EmployeeKnowledge.success_rate >= _MIN_SUCCESS_RATE,
+                        EmployeeKnowledge.times_used >= _MIN_TIMES_USED,
+                    )
+                )
+            )
+            candidates = high_perf.scalars().all()
+
+            if not candidates:
+                logger.info("No high-performing Q&A found for cross-learning")
+                return {"generalized": 0, "distributed": 0, "candidates": 0}
+
+            for qa in candidates:
+                # Find the source employee's industries
+                emp_industries = await session.execute(
+                    select(EmployeeIndustry.industry_id).where(
+                        EmployeeIndustry.employee_id == qa.employee_id
+                    )
+                )
+                industry_ids = [row[0] for row in emp_industries.all()]
+                if not industry_ids:
+                    continue
+
+                # Generalize the Q&A
+                try:
+                    gen = await self.generalize_qa(qa.question, qa.answer)
+                except Exception as exc:
+                    logger.warning(f"Generalization failed for {qa.id}: {exc}")
+                    continue
+
+                generalized += 1
+
+                # Find same-industry employees (excluding source)
+                peers = await session.execute(
+                    select(EmployeeIndustry.employee_id).where(
+                        and_(
+                            EmployeeIndustry.industry_id.in_(industry_ids),
+                            EmployeeIndustry.employee_id != qa.employee_id,
+                        )
+                    )
+                )
+                peer_ids = list({row[0] for row in peers.all()})
+
+                for peer_id in peer_ids:
+                    # Check for existing duplicate
+                    existing = await session.execute(
+                        select(EmployeeKnowledge).where(
+                            and_(
+                                EmployeeKnowledge.employee_id == peer_id,
+                                EmployeeKnowledge.question == gen["question"],
+                            )
+                        )
+                    )
+                    if existing.scalar_one_or_none() is not None:
+                        continue
+
+                    # Check if already suggested as pending learning
+                    existing_learning = await session.execute(
+                        select(EmployeeLearning).where(
+                            and_(
+                                EmployeeLearning.employee_id == peer_id,
+                                EmployeeLearning.new_value == gen["question"],
+                                EmployeeLearning.status == "pending",
+                            )
+                        )
+                    )
+                    if existing_learning.scalar_one_or_none() is not None:
+                        continue
+
+                    # Get peer's customer_id
+                    peer_emp = await session.execute(
+                        select(Employee.customer_id).where(Employee.id == peer_id)
+                    )
+                    peer_row = peer_emp.first()
+                    peer_customer_id = peer_row[0] if peer_row else ""
+
+                    # Add as pending learning item
+                    learning = EmployeeLearning(
+                        employee_id=peer_id,
+                        customer_id=peer_customer_id,
+                        learning_type="qa_pair",
+                        old_value=gen["question"],
+                        new_value=gen["answer"],
+                        confidence=qa.success_rate,
+                        status="pending",
+                        source="cross_learning",
+                    )
+                    session.add(learning)
+                    distributed += 1
+
+            await session.commit()
+
+        logger.info(
+            "Cross-learning cycle complete",
+            extra={
+                "candidates": len(candidates),
+                "generalized": generalized,
+                "distributed": distributed,
+            },
+        )
+        return {
+            "candidates": len(candidates),
+            "generalized": generalized,
+            "distributed": distributed,
+        }

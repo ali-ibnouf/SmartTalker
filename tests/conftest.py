@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import os
+
+# Set TESTING before any app imports to skip lifespan service connections
+os.environ["TESTING"] = "1"
+
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from typing import Generator
