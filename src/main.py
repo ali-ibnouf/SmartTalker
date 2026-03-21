@@ -37,6 +37,8 @@ from src.api.admin_session_routes import router as admin_session_router
 from src.api.admin_guardian_routes import router as admin_guardian_router
 from src.services.ai_agent.routes import router as agent_router
 from src.api.channel_routes import router as channel_router
+from src.api.onboarding_routes import router as onboarding_router
+from src.api.visitor_routes import router as visitor_router
 from src.api.webhooks.whatsapp import router as wa_webhook_router
 from src.api.webhooks.telegram import router as tg_webhook_router
 from src.api.webhooks.paddle import router as paddle_webhook_router
@@ -427,6 +429,8 @@ def create_app() -> FastAPI:
     application.include_router(admin_guardian_router)
     application.include_router(agent_router)
     application.include_router(channel_router)
+    application.include_router(onboarding_router)
+    application.include_router(visitor_router)
     application.include_router(wa_webhook_router)
     application.include_router(tg_webhook_router)
     application.include_router(paddle_webhook_router)
