@@ -40,12 +40,14 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 
-RUN mkdir -p /app/logs /app/files /app/clips /app/storage
+# Create all directories the app needs (including volume mount points)
+RUN mkdir -p /app/logs /app/files /app/clips /app/storage \
+    /app/outputs /app/data/kb /app/avatars /app/voices
 
 COPY src/ /app/src/
 COPY frontend/ /app/frontend/
 
-# Non-root user
+# Non-root user — create BEFORE chown so volumes inherit correct ownership
 RUN groupadd -r smarttalker && useradd -r -g smarttalker -d /app smarttalker \
     && chown -R smarttalker:smarttalker /app
 
