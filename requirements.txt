@@ -12,8 +12,9 @@ prometheus-fastapi-instrumentator==7.0.0
 aiortc>=1.9.0
 
 # ── Data Validation ──────────────────────────────────────────────────────────
-pydantic==2.10.5
+pydantic[email]==2.10.5
 pydantic-settings==2.7.1
+email-validator>=2.0
 
 # ── HTTP Client ──────────────────────────────────────────────────────────────
 httpx==0.28.1
