@@ -17,7 +17,6 @@ services:
       - APP_ENV=production
       - DEBUG=false
       - LOG_LEVEL=INFO
-      - TESTING=0
       # API
       - API_KEY=${API_KEY:?API_KEY must be set}
       - ADMIN_API_KEY=${ADMIN_API_KEY:?ADMIN_API_KEY must be set}
