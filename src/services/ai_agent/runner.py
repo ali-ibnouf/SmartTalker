@@ -21,7 +21,7 @@ logger = setup_logger("ai_agent.runner")
 async def main() -> None:
     """Entry point: set up DB/Redis, launch agent, serve health endpoint."""
     from src.config import get_settings
-    from src.db.database import Database
+    from src.db.engine import Database
     from src.services.ai_agent.agent import AIAgent
     from src.services.ai_agent.config import AgentSettings
     from src.services.ai_agent.rules import AgentContext
