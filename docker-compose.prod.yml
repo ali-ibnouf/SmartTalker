@@ -81,6 +81,11 @@ services:
     volumes:
       - central-logs:/app/logs
       - central-data:/app/data
+      - central-outputs:/app/outputs
+      - central-files:/app/files
+      - central-clips:/app/clips
+      - central-avatars:/app/avatars
+      - central-voices:/app/voices
     depends_on:
       postgres:
         condition: service_healthy
@@ -244,6 +249,16 @@ volumes:
   agent-logs:
     driver: local
   certbot-webroot:
+    driver: local
+  central-outputs:
+    driver: local
+  central-files:
+    driver: local
+  central-clips:
+    driver: local
+  central-avatars:
+    driver: local
+  central-voices:
     driver: local
 
 networks:
