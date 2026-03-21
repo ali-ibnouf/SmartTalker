@@ -202,6 +202,12 @@ services:
         condition: service_healthy
     volumes:
       - agent-logs:/app/logs
+      - central-data:/app/data
+      - central-outputs:/app/outputs
+      - central-files:/app/files
+      - central-clips:/app/clips
+      - central-avatars:/app/avatars
+      - central-voices:/app/voices
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" ]
       interval: 30s
