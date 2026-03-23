@@ -20,6 +20,7 @@ from typing import Any, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.services.ai_agent.rules import Detection
+from src.utils.async_utils import background_task_error_handler
 from src.utils.logger import SmartTalkerJsonFormatter, setup_logger
 
 logger = setup_logger("ai_agent.notifications")
@@ -107,7 +108,9 @@ class NotificationDispatcher:
     async def start(self) -> None:
         """Start background batch flush loops."""
         self._warning_task = asyncio.create_task(self._warning_flush_loop())
+        self._warning_task.add_done_callback(background_task_error_handler)
         self._info_task = asyncio.create_task(self._info_flush_loop())
+        self._info_task.add_done_callback(background_task_error_handler)
         logger.info("NotificationDispatcher started")
 
     async def stop(self) -> None:

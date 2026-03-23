@@ -128,7 +128,12 @@ async def paddle_webhook(request: Request):
             lifecycle = SubscriptionLifecycle(db=db, config=config)
 
             try:
-                plan_id = data.get("items", [{}])[0].get("price", {}).get("id", "")
+                items = data.get("items", [])
+                plan_id = ""
+                if isinstance(items, list) and items:
+                    plan_item = items[0]
+                    if isinstance(plan_item, dict):
+                        plan_id = plan_item.get("price", {}).get("id", "")
                 result = await lifecycle.reactivate(
                     customer_id=customer_id,
                     plan_id=plan_id,

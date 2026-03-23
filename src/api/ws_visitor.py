@@ -33,6 +33,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from src.config import get_settings
 from src.db.models import APICostRecord
 from src.utils.exceptions import SmartTalkerError
+from src.utils.async_utils import background_task_error_handler
 from src.utils.logger import setup_logger, log_with_latency
 
 logger = setup_logger("api.ws_visitor")
@@ -63,7 +64,12 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
     try:
         # ── Step 1: Auth ──────────────────────────────────────────────
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=15.0)
-        msg = json.loads(raw)
+        try:
+            msg = json.loads(raw)
+        except json.JSONDecodeError:
+            await _send(websocket, {"type": "error", "error": "Invalid JSON in auth message"})
+            await websocket.close(code=4001)
+            return
 
         if msg.get("type") != "auth":
             await _send(websocket, {"type": "error", "error": "Expected auth message"})
@@ -118,12 +124,18 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
 
         # ── Step 2: Message loop ──────────────────────────────────────
         while True:
-            raw = await websocket.receive_text()
+            raw = await asyncio.wait_for(
+                websocket.receive_text(), timeout=300.0,
+            )
             if len(raw) > _MAX_MSG_SIZE:
                 await _send(websocket, {"type": "error", "error": "Message too large"})
                 continue
 
-            msg = json.loads(raw)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                await _send(websocket, {"type": "error", "error": "Invalid JSON"})
+                continue
             msg_type = msg.get("type", "")
 
             # ── Audio chunk → accumulate in ASR session ───────────
@@ -132,7 +144,11 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
                 if not audio_b64:
                     continue
 
-                pcm_bytes = base64.b64decode(audio_b64)
+                try:
+                    pcm_bytes = base64.b64decode(audio_b64)
+                except Exception:
+                    await _send(websocket, {"type": "error", "error": "Invalid base64 audio data"})
+                    continue
 
                 if asr_session is None:
                     language = msg.get("language", "ar")
@@ -236,7 +252,7 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
                     learning_engine, session_id, employee_id, customer_id,
                 )
             )
-            task.add_done_callback(_bg_task_error_handler)
+            task.add_done_callback(background_task_error_handler)
 
         log_with_latency(
             logger,
@@ -248,14 +264,6 @@ async def visitor_session_handler(websocket: WebSocket) -> None:
 
 # ── Internal Helpers ───────────────────────────────────────────────────────
 
-
-def _bg_task_error_handler(task: asyncio.Task) -> None:
-    """Log exceptions from background tasks to prevent silent failures."""
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.error(f"Background task failed: {exc}", extra={"task": task.get_name()})
 
 
 async def _run_auto_learning(
@@ -312,7 +320,9 @@ async def _record_cost(
             session.add(record)
             await session.commit()
     except Exception as exc:
-        logger.debug(f"Cost recording failed: {exc}")
+        logger.error(f"Cost recording failed (billing gap): {exc}", extra={
+            "service": service, "customer_id": customer_id, "cost_usd": cost_usd,
+        })
 
 
 async def _authenticate(
@@ -408,6 +418,8 @@ def _make_confirmation_callback(websocket: WebSocket, session_id: str):
                     },
                 )
                 return bool(approved)
+        except json.JSONDecodeError:
+            logger.warning("Invalid JSON in action response", extra={"tool_id": tool_id})
         except asyncio.TimeoutError:
             logger.warning(
                 "Action response timeout",

@@ -11,6 +11,7 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -26,8 +27,9 @@ logger = setup_logger("services.runpod")
 # RunPod RTX 4090 serverless cost: ~$0.00076/sec
 COST_PER_SEC = 0.00076
 
-# Polling interval for job status
-POLL_INTERVAL = 0.5  # seconds
+# Polling interval for job status (with exponential backoff)
+POLL_INTERVAL_MIN = 0.5  # seconds
+POLL_INTERVAL_MAX = 5.0  # seconds
 DEFAULT_TIMEOUT = 120  # seconds
 
 
@@ -288,9 +290,10 @@ class RunPodServerless:
 
         logger.info("RunPod job submitted", extra={"job_id": job_id, "endpoint": endpoint})
 
-        # Poll for completion
+        # Poll for completion with exponential backoff + jitter
         status_url = f"{endpoint}/status/{job_id}"
         poll_failures = 0
+        poll_interval = POLL_INTERVAL_MIN
         while True:
             elapsed = time.perf_counter() - start
             if elapsed > timeout:
@@ -300,7 +303,9 @@ class RunPodServerless:
                     detail=f"job_id={job_id}",
                 )
 
-            await asyncio.sleep(POLL_INTERVAL)
+            jitter = random.uniform(0, poll_interval * 0.3)
+            await asyncio.sleep(poll_interval + jitter)
+            poll_interval = min(poll_interval * 1.5, POLL_INTERVAL_MAX)
 
             try:
                 status_resp = await client.get(status_url, timeout=10.0)

@@ -89,6 +89,7 @@ from src.services.ai_agent.notifications import NotificationDispatcher, Notifica
 from src.services.ai_agent.prevention import PatternTracker
 from src.services.ai_agent.rules import AgentContext, Detection, RuleRegistry
 from src.services.ai_agent.safety import HIGH_IMPACT_FIXES, SafetyGuard
+from src.utils.async_utils import background_task_error_handler
 from src.utils.logger import setup_logger
 
 logger = setup_logger("ai_agent")
@@ -215,7 +216,9 @@ class AIAgent:
         self._running = True
         await self._notifier.start()
         self._task = asyncio.create_task(self._loop())
+        self._task.add_done_callback(background_task_error_handler)
         self._stale_session_task = asyncio.create_task(self._stale_session_loop())
+        self._stale_session_task.add_done_callback(background_task_error_handler)
         logger.info("AI Agent started", extra={
             "scan_interval_s": self._ctx.agent_config.scan_interval_s,
             "rules_count": len(self._rule_registry.rules),

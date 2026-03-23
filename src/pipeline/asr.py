@@ -110,7 +110,11 @@ class ASRSession:
         # Collect responses until session.finished
         try:
             async for raw_msg in self._ws:
-                data = json.loads(raw_msg)
+                try:
+                    data = json.loads(raw_msg)
+                except json.JSONDecodeError:
+                    logger.warning("ASR received malformed JSON, skipping")
+                    continue
                 msg_type = data.get("type", "")
 
                 if msg_type == "transcription.text":

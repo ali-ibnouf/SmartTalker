@@ -62,15 +62,23 @@ async def receive_message(employee_id: str, request: Request):
 
     # Verify it's a message (not a status update)
     entries = body.get("entry", [])
-    if not entries:
+    if not isinstance(entries, list) or not entries:
         return {"status": "ok"}
 
-    changes = entries[0].get("changes", [])
-    if not changes:
+    entry = entries[0]
+    if not isinstance(entry, dict):
         return {"status": "ok"}
 
-    value = changes[0].get("value", {})
-    if not value.get("messages"):
+    changes = entry.get("changes", [])
+    if not isinstance(changes, list) or not changes:
+        return {"status": "ok"}
+
+    change = changes[0]
+    if not isinstance(change, dict):
+        return {"status": "ok"}
+
+    value = change.get("value", {})
+    if not isinstance(value, dict) or not value.get("messages"):
         return {"status": "ok"}
 
     db = getattr(request.app.state, "db", None)

@@ -56,6 +56,7 @@ from src.pipeline.learning_analytics import LearningAnalytics
 from src.pipeline.supervisor import SupervisorEngine
 from src.pipeline.analytics import AnalyticsEngine
 from src.utils.exceptions import SmartTalkerError
+from src.utils.async_utils import background_task_error_handler
 from src.utils.logger import setup_logger
 from src.integrations.whatsapp import WhatsAppClient
 from src.integrations.storage import StorageManager
@@ -295,6 +296,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         runpod_client=getattr(pipeline, "_runpod", None),
     )
     guardian_task = asyncio.create_task(cost_guardian.start())
+    guardian_task.add_done_callback(background_task_error_handler)
     application.state.cost_guardian = cost_guardian
     logger.info("Cost Guardian started")
 
@@ -318,6 +320,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
                 logger.warning(f"Periodic cleanup failed: {exc}")
 
     cleanup_task = asyncio.create_task(_periodic_cleanup())
+    cleanup_task.add_done_callback(background_task_error_handler)
 
     # Weekly Cross-Learning CRON Task — runs every 7 days
     async def _weekly_cross_learning():
@@ -339,6 +342,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
                     logger.warning(f"Cross-learning CRON cycle failed: {exc}")
 
     cross_learning_task = asyncio.create_task(_weekly_cross_learning())
+    cross_learning_task.add_done_callback(background_task_error_handler)
 
     logger.info(
         "SmartTalker ready",

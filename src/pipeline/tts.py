@@ -129,7 +129,11 @@ class TTSStream:
         try:
             while True:
                 raw_msg = await self._ws.recv()
-                data = json.loads(raw_msg)
+                try:
+                    data = json.loads(raw_msg)
+                except json.JSONDecodeError:
+                    logger.warning("TTS received malformed JSON, skipping")
+                    continue
                 msg_type = data.get("type", "")
 
                 if msg_type == "audio.delta":

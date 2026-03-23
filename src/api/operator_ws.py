@@ -41,17 +41,10 @@ from typing import Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from src.utils.async_utils import background_task_error_handler
 from src.utils.logger import setup_logger
 
 
-def _bg_task_error_handler(task: asyncio.Task) -> None:
-    """Log exceptions from background tasks to prevent silent failures."""
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        _logger = setup_logger("operator_ws.bg_task")
-        _logger.error(f"Background task failed: {exc}", extra={"task": task.get_name()})
 
 logger = setup_logger("api.operator_ws")
 
@@ -373,7 +366,7 @@ class OperatorWebSocketManager:
                             customer_ws=customer_session.websocket,
                             app=None,
                         ))
-                        task.add_done_callback(_bg_task_error_handler)
+                        task.add_done_callback(background_task_error_handler)
                     except Exception as voice_exc:
                         logger.debug(f"Voice synthesis skipped: {voice_exc}")
 
