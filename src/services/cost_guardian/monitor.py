@@ -23,7 +23,7 @@ class CostMonitor:
         """Get total spend for a service in the last N hours."""
         if self.db is None:
             return 0.0
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.coalesce(func.sum(APICostRecord.cost_usd), 0.0))
@@ -38,7 +38,7 @@ class CostMonitor:
         """Get today's total spend for a service."""
         if self.db is None:
             return 0.0
-        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(tzinfo=None).replace(hour=0, minute=0, second=0, microsecond=0)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.coalesce(func.sum(APICostRecord.cost_usd), 0.0))
@@ -53,7 +53,7 @@ class CostMonitor:
         """Get this month's total spend for a service."""
         if self.db is None:
             return 0.0
-        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.coalesce(func.sum(APICostRecord.cost_usd), 0.0))
@@ -68,7 +68,7 @@ class CostMonitor:
         """Get full breakdown of this month's spend by service."""
         if self.db is None:
             return {}
-        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         async with self.db.session() as session:
             result = await session.execute(
                 select(
@@ -89,7 +89,7 @@ class CostMonitor:
         """Get this month's total API spend for a specific customer."""
         if self.db is None:
             return 0.0
-        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.coalesce(func.sum(APICostRecord.cost_usd), 0.0))
@@ -104,7 +104,7 @@ class CostMonitor:
         """Get number of API calls in last N minutes."""
         if self.db is None:
             return 0
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=minutes)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.count(APICostRecord.id))
@@ -119,7 +119,7 @@ class CostMonitor:
         """Get number of API calls from a customer in last N minutes."""
         if self.db is None:
             return 0
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=minutes)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.count(APICostRecord.id))
@@ -134,7 +134,7 @@ class CostMonitor:
         """Get average hourly spend over the lookback period."""
         if self.db is None:
             return 0.0
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=lookback_hours)
         async with self.db.session() as session:
             result = await session.execute(
                 select(func.coalesce(func.sum(APICostRecord.cost_usd), 0.0))
@@ -164,7 +164,7 @@ class CostMonitor:
         """Get RunPod jobs that started but logged $0 cost (still running or stuck)."""
         if self.db is None:
             return []
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
         async with self.db.session() as session:
             result = await session.execute(
                 select(
@@ -196,7 +196,7 @@ class CostMonitor:
         """Get customers with highest spend this month."""
         if self.db is None:
             return []
-        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start = datetime.now(timezone.utc).replace(tzinfo=None).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         async with self.db.session() as session:
             result = await session.execute(
                 select(
@@ -242,7 +242,7 @@ class CostMonitor:
         """Get distinct customer IDs active in the last N minutes."""
         if self.db is None:
             return []
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=minutes)
         async with self.db.session() as session:
             result = await session.execute(
                 select(distinct(APICostRecord.customer_id))
@@ -257,7 +257,7 @@ class CostMonitor:
         """Get services with many $0-cost calls in the last hour (billing broken?)."""
         if self.db is None:
             return []
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
         async with self.db.session() as session:
             result = await session.execute(
                 select(

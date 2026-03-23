@@ -44,7 +44,7 @@ class CostGuardian:
                 logger.error(f"Cost Guardian cycle error: {e}")
 
             # Daily report at 23:55 UTC
-            now = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             if now.hour == 23 and now.minute >= 55:
                 if self._last_daily_report is None or self._last_daily_report.date() != now.date():
                     try:

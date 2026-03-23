@@ -1,5 +1,5 @@
 /**
- * SmartTalker — Operator Dashboard Client
+ * Maskki — Operator Dashboard Client
  *
  * Connects to /ws/operator for real-time customer session monitoring,
  * chat mirroring, operator override messaging, and training feedback.
@@ -65,8 +65,8 @@ const state = {
 // ═══════════════════════════════════════════════════════════════════
 
 function getWsBase() {
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${location.host}`;
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return "ws://localhost:8000";
+    return "wss://ws.maskki.com";
 }
 
 function setStatus(status, text) {

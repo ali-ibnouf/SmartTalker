@@ -1,5 +1,5 @@
 /**
- * SmartTalker — Admin Dashboard Logic
+ * Maskki — Admin Dashboard Logic
  * Fetches KPIs, drift alerts, guardrail violations, and review queues.
  */
 
@@ -30,11 +30,17 @@ const HEADERS = {
     "Content-Type": "application/json"
 };
 
+function getApiBase() {
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return "http://localhost:8000";
+    return "https://ws.maskki.com";
+}
+
 /** Fetch JSON from API */
 async function fetchApi(path, options = {}) {
     options.headers = { ...HEADERS, ...options.headers };
     try {
-        const res = await fetch(path, options);
+        const url = path.startsWith("http") ? path : getApiBase() + path;
+        const res = await fetch(url, options);
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
         return await res.json();
     } catch (err) {

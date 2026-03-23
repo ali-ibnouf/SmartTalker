@@ -238,7 +238,7 @@ class TestAnomalyDetection:
 
     @pytest.mark.asyncio
     async def test_stuck_runpod_job_detected(self, analyzer, mock_monitor):
-        old_time = datetime.now(timezone.utc) - timedelta(minutes=15)
+        old_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=15)
         mock_monitor.get_runpod_active_jobs.return_value = [
             {"id": "job_1", "customer_id": "c1", "session_id": "s1",
              "created_at": old_time, "details": "{}"},
@@ -251,7 +251,7 @@ class TestAnomalyDetection:
 
     @pytest.mark.asyncio
     async def test_stuck_job_not_triggered_for_new_jobs(self, analyzer, mock_monitor):
-        recent_time = datetime.now(timezone.utc) - timedelta(minutes=2)
+        recent_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=2)
         mock_monitor.get_runpod_active_jobs.return_value = [
             {"id": "job_2", "customer_id": "c1", "session_id": "s1",
              "created_at": recent_time, "details": "{}"},

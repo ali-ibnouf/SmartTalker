@@ -1,5 +1,5 @@
 /**
- * SmartTalker — VRM Avatar Module
+ * Maskki — VRM Avatar Module
  *
  * Uses Three.js and @pixiv/three-vrm to render a 3D avatar on a canvas.
  * Implements real-time lip synchronicity via Web Audio API analysis

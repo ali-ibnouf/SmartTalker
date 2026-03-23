@@ -38,6 +38,8 @@ def _is_excluded(path: str) -> bool:
     """Check if a request path should bypass auth/rate limiting."""
     if path in _EXCLUDED_PATHS:
         return True
+    if path.startswith("/api/v1/health"):
+        return True
     if path.startswith("/ws/"):
         return True
     return False

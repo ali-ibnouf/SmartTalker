@@ -86,7 +86,7 @@ class CostReporter:
             </tr>
             <tr>
                 <td style="padding: 10px; border: 1px solid #ddd;"><strong>Time</strong></td>
-                <td style="padding: 10px; border: 1px solid #ddd;">{datetime.now(timezone.utc).isoformat()}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}</td>
             </tr>
         </table>
         <p style="margin-top: 20px; color: #666;">
@@ -128,7 +128,7 @@ class CostReporter:
                 html += f"<li><strong>{a.service}</strong>: {a.message}</li>"
             html += "</ul>"
 
-        html += f'<p style="color: #999;">Generated at {datetime.now(timezone.utc).isoformat()} UTC</p>'
+        html += f'<p style="color: #999;">Generated at {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()} UTC</p>'
         return html
 
     def _build_daily_report(

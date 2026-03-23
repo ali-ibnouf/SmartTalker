@@ -1,5 +1,5 @@
 /**
- * SmartTalker Frontend — WebRTC + WebSocket Chat Client
+ * Maskki Frontend — WebRTC + WebSocket Chat Client
  *
  * Features:
  *   - Avatar video clips (pre-generated via RunPod worker)
@@ -111,7 +111,7 @@ const state = {
  */
 function getAvatarClipsBase() {
     const avatarId = dom.cfgAvatar ? dom.cfgAvatar.value : "default";
-    return `/clips/${avatarId}/`;
+    return `${getApiBase()}/clips/${avatarId}/`;
 }
 
 const EMOTION_TO_CLIP = {
@@ -146,7 +146,7 @@ async function initAvatarClips() {
     // 1. Fetch info to check if avatar has VRM
     const avatarId = dom.cfgAvatar ? dom.cfgAvatar.value : "default";
     try {
-        const res = await fetch(`/api/v1/avatars/${avatarId}/vrm-info`);
+        const res = await fetch(`${getApiBase()}/api/v1/avatars/${avatarId}/vrm-info`);
         if (res.ok) {
             const data = await res.json();
             state.avatarType = data.avatar_type;
@@ -195,8 +195,13 @@ function setupAvatarAudioSync() {
 // ═══════════════════════════════════════════════════════════════════
 
 function getWsBase() {
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${location.host}`;
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return "ws://localhost:8000";
+    return "wss://ws.maskki.com";
+}
+
+function getApiBase() {
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return "http://localhost:8000";
+    return "https://ws.maskki.com";
 }
 
 function setStatus(status, text) {
@@ -270,7 +275,7 @@ function connectChat() {
                 dom.sessionId.textContent = `Session: ${data.session_id}`;
                 dom.chatInput.disabled = false;
                 dom.sendBtn.disabled = false;
-                addSystemMessage(data.message || "Connected to SmartTalker");
+                addSystemMessage(data.message || "Connected to Maskki");
 
                 // Start lip-sync context logic if in VRM mode
                 setupAvatarAudioSync();

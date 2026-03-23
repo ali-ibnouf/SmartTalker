@@ -53,7 +53,7 @@ class CostAlert:
         self.threshold = threshold
         self.action = action
         self.customer_id = customer_id
-        self.timestamp = datetime.now(timezone.utc)
+        self.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def __repr__(self) -> str:
         return f"CostAlert({self.level.value}: {self.service} — {self.message})"
@@ -248,12 +248,12 @@ class CostAnalyzer:
         alerts: list[CostAlert] = []
         active_jobs = await self.monitor.get_runpod_active_jobs()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for job in active_jobs:
             created = job["created_at"]
-            # Handle naive datetimes from SQLite/test
-            if created.tzinfo is None:
-                created = created.replace(tzinfo=timezone.utc)
+            # Ensure both are naive for comparison
+            if created.tzinfo is not None:
+                created = created.astimezone(timezone.utc).replace(tzinfo=None)
             age_minutes = (now - created).total_seconds() / 60
             if age_minutes > 10:
                 alerts.append(CostAlert(

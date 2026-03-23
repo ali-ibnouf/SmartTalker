@@ -49,7 +49,7 @@ class CostEnforcer:
 
         result: dict[str, Any] = {
             "action": action,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         try:
@@ -118,7 +118,7 @@ class CostEnforcer:
                         Conversation.customer_id == customer_id,
                         Conversation.ended_at.is_(None),
                     ))
-                    .values(ended_at=datetime.now(timezone.utc))
+                    .values(ended_at=datetime.now(timezone.utc).replace(tzinfo=None))
                 )
                 await session.commit()
         logger.critical(f"CUSTOMER PAUSED: {customer_id} for 24h due to margin overrun")
@@ -143,7 +143,7 @@ class CostEnforcer:
             if self.db:
                 from src.db.models import APICostRecord
                 from sqlalchemy import select, and_
-                cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(minutes=10)
+                cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - __import__("datetime").timedelta(minutes=10)
                 async with self.db.session() as session:
                     result = await session.execute(
                         select(APICostRecord.details)
