@@ -1981,9 +1981,17 @@ async def analytics_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Number of days"),
 ) -> DashboardDataResponse:
     """Get dashboard data."""
+    empty = DashboardDataResponse(
+        avatar_id=avatar_id,
+        kpis=KPISnapshotResponse(avatar_id=avatar_id),
+        trends={},
+        top_skills=[],
+        bottom_skills=[],
+    )
+
     analytics_engine = getattr(request.app.state, "analytics", None)
     if analytics_engine is None or not analytics_engine.is_loaded:
-        raise HTTPException(status_code=503, detail="Analytics engine is not available")
+        return empty
 
     try:
         data = await analytics_engine.get_dashboard_data(avatar_id, days=days)
@@ -2010,7 +2018,8 @@ async def analytics_dashboard(
             bottom_skills=data.get("bottom_skills", []),
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.warning("Analytics dashboard error for %s: %s", avatar_id, exc)
+        return empty
 
 
 @router.get(

@@ -455,20 +455,10 @@ class AnalyticsEngine:
                     bottom_skills.append({"skill_id": s.id, "name": s.name, "progress": s.progress})
 
         return {
-            "kpis": {
-                "total_conversations": kpis.total_conversations,
-                "total_messages": kpis.total_messages,
-                "avg_response_time_ms": kpis.avg_response_time_ms,
-                "avg_kb_confidence": kpis.avg_kb_confidence,
-                "escalation_rate": kpis.escalation_rate,
-                "autonomy_percent": kpis.autonomy_percent,
-                "accuracy_score": kpis.accuracy_score,
-                "total_cost": kpis.total_cost,
-                "unique_users": kpis.unique_users,
-            },
+            "kpis": kpis,
             "trends": {
-                "conversations": [{"date": p.date, "value": p.value} for p in conv_trend],
-                "autonomy": [{"date": p.date, "value": p.value} for p in autonomy_trend],
+                "conversations": conv_trend,
+                "autonomy": autonomy_trend,
             },
             "drift_alerts": [
                 {"metric": a.metric_name, "current": a.current_value, "baseline": a.baseline_value,

@@ -93,7 +93,7 @@ class TestAnalyticsEngine:
         assert "trends" in data
         assert "top_skills" in data
         assert "bottom_skills" in data
-        assert data["kpis"]["total_conversations"] >= 0
+        assert data["kpis"].total_conversations >= 0
 
         await engine.unload()
 
