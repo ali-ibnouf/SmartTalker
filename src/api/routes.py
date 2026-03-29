@@ -2455,6 +2455,100 @@ async def _process_whatsapp_payload(payload: dict, app):
 
 
 # =============================================================================
+# Avatar CRUD (customer dashboard)
+# =============================================================================
+
+
+@router.post(
+    "/avatars",
+    summary="Create Avatar",
+    description="Create a new avatar for the customer.",
+)
+async def create_avatar(request: Request) -> dict:
+    """Create a new avatar. Resolves customer_id from the first active customer."""
+    from sqlalchemy import select
+    from src.db.models import Avatar, Customer
+
+    db = getattr(request.app.state, "db", None)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database is not available")
+
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    role = body.get("role", "")
+    languages = body.get("languages", [])
+    language = languages[0] if languages else "en"
+
+    async with db.session() as session:
+        # Resolve customer — single-tenant: pick first active customer
+        result = await session.execute(
+            select(Customer).where(Customer.is_active == True).limit(1)  # noqa: E712
+        )
+        customer = result.scalars().first()
+        if not customer:
+            raise HTTPException(status_code=400, detail="No active customer found")
+
+        avatar = Avatar(
+            id=uuid.uuid4().hex,
+            customer_id=customer.id,
+            name=name,
+            language=language,
+            avatar_type="video",
+        )
+        session.add(avatar)
+        await session.commit()
+
+        logger.info("Created avatar %s for customer %s", avatar.id, customer.id)
+        return {
+            "id": avatar.id,
+            "name": avatar.name,
+            "language": avatar.language,
+            "avatar_type": avatar.avatar_type,
+            "created_at": avatar.created_at.isoformat() if avatar.created_at else None,
+        }
+
+
+@router.get(
+    "/avatars/{avatar_id}",
+    summary="Get Avatar",
+    description="Get avatar details by ID.",
+)
+async def get_avatar(avatar_id: str, request: Request) -> dict:
+    """Return avatar details including photo_preprocessed status."""
+    from sqlalchemy import select
+    from src.db.models import Avatar
+
+    db = getattr(request.app.state, "db", None)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database is not available")
+
+    async with db.session() as session:
+        result = await session.execute(
+            select(Avatar).where(Avatar.id == avatar_id)
+        )
+        avatar = result.scalars().first()
+        if not avatar:
+            raise HTTPException(status_code=404, detail="Avatar not found")
+
+        return {
+            "id": avatar.id,
+            "name": avatar.name,
+            "photo_url": avatar.photo_url,
+            "voice_id": avatar.voice_id,
+            "language": avatar.language,
+            "is_live": avatar.is_live,
+            "training_progress": avatar.training_progress,
+            "avatar_type": avatar.avatar_type,
+            "photo_preprocessed": avatar.photo_preprocessed,
+            "face_data_url": avatar.face_data_url,
+            "created_at": avatar.created_at.isoformat() if avatar.created_at else None,
+        }
+
+
+# =============================================================================
 # VRM Avatar
 # =============================================================================
 
