@@ -1,0 +1,25 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/maskki
+            git pull origin master
+            docker compose -f docker-compose.prod.yml build --no-cache central
+            docker compose -f docker-compose.prod.yml up -d central
+            sleep 5
+            docker exec smarttalker-nginx curl -sf http://central:8000/health || echo "HEALTH CHECK FAILED"
+            docker exec smarttalker-nginx curl -sf http://central:8000/api/v1/public/agent-templates | head -c 200
+          script_stop: false
+          command_timeout: 10m
