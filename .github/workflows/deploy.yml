@@ -21,5 +21,4 @@ jobs:
             sleep 5
             docker exec smarttalker-nginx curl -sf http://central:8000/health || echo "HEALTH CHECK FAILED"
             docker exec smarttalker-nginx curl -sf http://central:8000/api/v1/public/agent-templates | head -c 200
-          script_stop: false
           command_timeout: 10m
