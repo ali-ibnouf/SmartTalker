@@ -1110,3 +1110,83 @@ class CostGuardianLog(Base):
         Index("idx_guardian_log_time", "created_at"),
         Index("idx_guardian_log_level", "alert_level"),
     )
+
+
+# =============================================================================
+# Agent Templates & Customer Agents
+# =============================================================================
+
+
+class AgentTemplate(Base):
+    """Reusable agent template — defines persona, KB seeds, system prompt."""
+    __tablename__ = "agent_templates"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(200), nullable=False)
+    description_ar: Mapped[str] = mapped_column(Text, nullable=False)
+    description_en: Mapped[str] = mapped_column(Text, nullable=False)
+    job_title_ar: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    job_title_en: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    icon_emoji: Mapped[str] = mapped_column(String(10), default="🤖")
+    color_accent: Mapped[str] = mapped_column(String(7), default="#00D4AA")
+    default_language: Mapped[str] = mapped_column(String(10), default="ar")
+    default_personality: Mapped[str] = mapped_column(String(50), default="professional")
+    system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kb_template: Mapped[str] = mapped_column(Text, default="{}")  # JSON
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    agents: Mapped[list["CustomerAgent"]] = relationship(back_populates="template")
+
+    __table_args__ = (
+        Index("idx_agent_templates_published", "is_published"),
+    )
+
+
+class CustomerAgent(Base):
+    """Customer-owned digital agent instance."""
+    __tablename__ = "customer_agents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_uuid)
+    customer_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("customers.id"), nullable=False
+    )
+    template_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("agent_templates.id"), nullable=True
+    )
+    name_ar: Mapped[str] = mapped_column(String(200), nullable=False)
+    name_en: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_r2_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_preprocessed: Mapped[bool] = mapped_column(Boolean, default=False)
+    voice_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    voice_cloned: Mapped[bool] = mapped_column(Boolean, default=False)
+    personality: Mapped[str] = mapped_column(String(50), default="professional")
+    language: Mapped[str] = mapped_column(String(10), default="ar")
+    kb_document_count: Mapped[int] = mapped_column(Integer, default=0)
+    kb_faq_count: Mapped[int] = mapped_column(Integer, default=0)
+    kb_status: Mapped[str] = mapped_column(String(20), default="empty")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    channels: Mapped[str] = mapped_column(
+        Text, default='{"widget":true,"whatsapp":false,"telegram":false}'
+    )  # JSON
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    customer: Mapped["Customer"] = relationship()
+    template: Mapped["AgentTemplate | None"] = relationship(back_populates="agents")
+
+    __table_args__ = (
+        Index("idx_customer_agents_customer", "customer_id"),
+        Index("idx_customer_agents_template", "template_id"),
+    )

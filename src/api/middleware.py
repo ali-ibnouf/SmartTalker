@@ -40,6 +40,8 @@ def _is_excluded(path: str) -> bool:
         return True
     if path.startswith("/api/v1/health"):
         return True
+    if path.startswith("/api/v1/public/"):
+        return True
     if path.startswith("/ws/"):
         return True
     # Webhook endpoints — Meta/Telegram send unsigned GET/POST

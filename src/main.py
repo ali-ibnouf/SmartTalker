@@ -45,6 +45,11 @@ from src.api.webhooks.whatsapp import router as wa_webhook_router
 from src.api.webhooks.telegram import router as tg_webhook_router
 from src.api.webhooks.paddle import router as paddle_webhook_router
 from src.api.kb_routes import router as kb_router
+from src.api.agent_templates import (
+    public_router as agent_public_router,
+    customer_router as agent_customer_router,
+    admin_router as agent_admin_router,
+)
 from src.api.schemas import ErrorResponse
 from src.api.websocket import WebSocketManager, websocket_chat_endpoint
 from src.api.operator_ws import OperatorWebSocketManager, operator_websocket_endpoint
@@ -444,6 +449,9 @@ def create_app() -> FastAPI:
     application.include_router(tg_webhook_router)
     application.include_router(paddle_webhook_router)
     application.include_router(kb_router)
+    application.include_router(agent_public_router)
+    application.include_router(agent_customer_router)
+    application.include_router(agent_admin_router)
 
     # ── WebSocket Endpoint ───────────────────────────────────────────────
     @application.websocket("/ws/chat")
