@@ -1,16 +1,17 @@
-# SmartTalker API Reference
+# Maskki (SmartTalker) API Reference
 
 ## Base URL
 ```
-http://localhost:8000
+https://ws.maskki.com
 ```
 
 ## Authentication
 
-API key authentication via the `X-API-Key` header. In **development** mode (`APP_ENV=development`), authentication is optional. In **production** mode, a valid `API_KEY` must be configured and all requests must include the header.
+Standard API requests require `X-API-Key`. Administrative requests require `X-Admin-API-Key`. In **production** mode, these are mandatory.
 
 ```
-X-API-Key: your-api-key-here
+X-API-Key: your-customer-api-key
+X-Admin-API-Key: your-admin-api-key
 ```
 
 The `/health` endpoint is always accessible without authentication. WhatsApp webhook endpoints use Meta's signature verification.
@@ -40,9 +41,9 @@ Send text, receive AI-generated audio response.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `text` | string | ✅ | — | Input text (1–2000 chars) |
-| `avatar_id` | string | — | `"default"` | Avatar for video |
+| `avatar_id` | string | — | `"default"` | Avatar for video rendering |
 | `emotion` | string | — | `"neutral"` | Emotion label |
-| `language` | string | — | `"ar"` | Response language |
+| `language` | string | — | `"ar"` | Code: `ar`, `en`, `fr`, `tr` |
 | `voice_id` | string | — | `null` | Voice clone ID |
 
 **Response (200):**
@@ -112,6 +113,19 @@ List all available voices.
 
 ---
 
+### POST `/api/v1/webhooks/paddle`
+Listener for Paddle billing events. Requires `Paddle-Signature` verification.
+
+**Supported Events:**
+- `subscription.created`
+- `subscription.updated`
+- `subscription.canceled`
+- `transaction.completed`
+
+**Response (200):** `{"status": "ok"}`
+
+---
+
 ### GET `/api/v1/health`
 System health check.
 
@@ -120,6 +134,7 @@ System health check.
 {
   "status": "healthy",
   "models_loaded": { "asr": true, "tts": true, "emotion": true, "llm": true, "kb": true },
+  "services": { "db": "ok", "redis": "ok", "r2": "ok", "d1": "ok" },
   "uptime_s": 3600.0
 }
 ```

@@ -42,6 +42,9 @@ def _is_excluded(path: str) -> bool:
         return True
     if path.startswith("/ws/"):
         return True
+    # Webhook endpoints — Meta/Telegram send unsigned GET/POST
+    if path.startswith("/webhooks/"):
+        return True
     return False
 
 
@@ -152,10 +155,13 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
     """Reject requests without a valid X-API-Key header.
 
     Admin endpoints (/api/v1/admin/*) require ADMIN_API_KEY.
-    All other endpoints use the regular API_KEY.
+    Regular endpoints accept the global API_KEY, admin key, or a per-customer key.
     """
 
     _dev_warning_logged: bool = False
+    # Cache: api_key -> (customer_id, expiry_timestamp)
+    _customer_key_cache: dict[str, tuple[str, float]] = {}
+    _CACHE_TTL = 300  # 5 minutes
 
     def __init__(self, app: Any, config: Settings):
         super().__init__(app)
@@ -165,12 +171,51 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
         """Check if a request path requires admin-level auth."""
         return path.startswith("/api/v1/admin/")
 
+    async def _check_customer_key(self, request: Request, client_key: str) -> bool:
+        """Check if client_key matches an active customer's API key."""
+        now = time.time()
+        cached = self._customer_key_cache.get(client_key)
+        if cached:
+            customer_id, expiry = cached
+            if now < expiry:
+                request.state.customer_id = customer_id
+                return True
+            del self._customer_key_cache[client_key]
+
+        try:
+            db = getattr(request.app.state, "db", None)
+            if not db:
+                return False
+            from src.db.models import Customer
+            from sqlalchemy import select
+
+            async with db.session() as session:
+                result = await session.execute(
+                    select(Customer.id, Customer.is_active, Customer.suspended)
+                    .where(Customer.api_key == client_key)
+                )
+                customer = result.first()
+                if customer and customer.is_active and not customer.suspended:
+                    self._customer_key_cache[client_key] = (customer.id, now + self._CACHE_TTL)
+                    request.state.customer_id = customer.id
+                    return True
+        except Exception as exc:
+            logger.debug(f"Customer key lookup failed: {exc}")
+        return False
+
     async def dispatch(
         self,
         request: Request,
         call_next: RequestResponseEndpoint,
     ) -> Response:
         if _is_excluded(request.url.path):
+            return await call_next(request)
+
+        # Public GET for session-link token lookup (token IS the auth)
+        if (
+            request.method == "GET"
+            and request.url.path.startswith("/api/v1/session-links/")
+        ):
             return await call_next(request)
 
         # No API key configured — dev mode
@@ -186,8 +231,6 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
         if self._is_admin_path(request.url.path):
             admin_key = self.config.admin_api_key
             if not admin_key:
-                # No admin key configured — fall back to requiring regular API key
-                # but log a warning
                 if not hmac.compare_digest(client_key, self.config.api_key):
                     return JSONResponse(
                         status_code=403,
@@ -200,8 +243,14 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
                 )
             return await call_next(request)
 
-        # Regular endpoints — validate with standard API key
-        if not hmac.compare_digest(client_key, self.config.api_key):
+        # Regular endpoints — accept global key, admin key, or per-customer key
+        admin_key = self.config.admin_api_key
+        is_valid = hmac.compare_digest(client_key, self.config.api_key) or (
+            bool(admin_key) and hmac.compare_digest(client_key, admin_key)
+        )
+        if not is_valid:
+            is_valid = await self._check_customer_key(request, client_key)
+        if not is_valid:
             return JSONResponse(
                 status_code=403,
                 content={"detail": "Invalid or missing API Key"},
@@ -367,6 +416,44 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         return await call_next(request)
+
+
+class CORSCleanupMiddleware:
+    """Raw ASGI middleware that strips leaked CORS credentials/expose headers
+    when Access-Control-Allow-Origin is absent (origin was rejected).
+
+    Must wrap CORSMiddleware to intercept raw ASGI messages after CORS
+    headers are injected — BaseHTTPMiddleware cannot do this reliably.
+    """
+
+    def __init__(self, app: Any):
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: Any) -> None:
+            if message["type"] == "http.response.start":
+                raw_headers = list(message.get("headers", []))
+                has_allow_origin = any(
+                    k.lower() == b"access-control-allow-origin"
+                    for k, _v in raw_headers
+                )
+                if not has_allow_origin:
+                    _leaked = (
+                        b"access-control-allow-credentials",
+                        b"access-control-expose-headers",
+                    )
+                    raw_headers = [
+                        (k, v) for k, v in raw_headers
+                        if k.lower() not in _leaked
+                    ]
+                    message = {**message, "headers": raw_headers}
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

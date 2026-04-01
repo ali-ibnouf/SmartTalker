@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from src.config import Settings
+from src.services.language_detector import detect_language
 from src.utils.exceptions import ASRError
 from src.utils.logger import setup_logger, log_with_latency
 
@@ -141,7 +142,7 @@ class ASRSession:
             await self._ws.close()
 
         full_text = " ".join(self._transcript_parts).strip()
-        detected_lang = ASREngine._detect_language(full_text) if full_text else self._language
+        detected_lang = detect_language(full_text) if full_text else self._language
         cost = self._audio_duration_s / 60.0 * COST_PER_MINUTE
 
         return TranscriptionResult(
@@ -306,43 +307,6 @@ class ASREngine:
             },
         )
         return result
-
-    # Turkish-unique characters (not shared with French or English)
-    _TURKISH_UNIQUE = frozenset("ğĞışİŞ")
-    # French accented characters
-    _FRENCH_MARKERS = frozenset("éèêëàâäùûüôöïîçÉÈÊËÀÂÄÙÛÜÔÖÏÎÇœŒæÆ")
-
-    @staticmethod
-    def _detect_language(text: str) -> str:
-        """Detect language from transcribed text (AR/EN/FR/TR).
-
-        Arabic is identified by Unicode Arabic block characters.
-        Among Latin-script languages, Turkish is identified by unique
-        characters (ğ, ı, ş, İ), French by accented characters
-        (é, è, ê, etc.), and English is the fallback.
-        """
-        if not text:
-            return "unknown"
-
-        arabic_chars = sum(
-            1 for c in text if "\u0600" <= c <= "\u06FF" or "\u0750" <= c <= "\u077F"
-        )
-        latin_chars = sum(1 for c in text if "A" <= c <= "Z" or "a" <= c <= "z")
-        total = arabic_chars + latin_chars
-
-        if total == 0:
-            return "unknown"
-        if arabic_chars / total > 0.5:
-            return "ar"
-        if latin_chars / total > 0.3:
-            turkish_unique = sum(1 for c in text if c in ASREngine._TURKISH_UNIQUE)
-            if turkish_unique > 0:
-                return "tr"
-            french_markers = sum(1 for c in text if c in ASREngine._FRENCH_MARKERS)
-            if french_markers > 0:
-                return "fr"
-            return "en"
-        return "mixed"
 
     def unload(self) -> None:
         """No-op — no local resources to free."""

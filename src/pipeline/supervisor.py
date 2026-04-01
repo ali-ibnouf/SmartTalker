@@ -174,7 +174,7 @@ class SupervisorEngine:
                     avatar_id=avatar_id,
                     details=details_json,
                     response_time_ms=response_time_ms,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 ))
         else:
             conn = self._sqlite_conn
@@ -201,7 +201,7 @@ class SupervisorEngine:
             from sqlalchemy import select, func as sa_func
             from src.db.models import OperatorAction
 
-            since = datetime.now(timezone.utc) - timedelta(days=days)
+            since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
             async with self._db.session() as session:
                 base = select(OperatorAction).where(
                     OperatorAction.operator_id == operator_id,
@@ -328,7 +328,7 @@ class SupervisorEngine:
             from sqlalchemy import select, func as sa_func
             from src.db.models import OperatorAction
 
-            since = datetime.now(timezone.utc) - timedelta(days=days)
+            since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
             async with self._db.session() as session:
                 result = await session.execute(
                     select(sa_func.distinct(OperatorAction.operator_id)).where(
@@ -383,7 +383,7 @@ class SupervisorEngine:
                     ai_response=ai_response[:5000],
                     confidence=confidence,
                     flagged_reason=reason,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 ))
         else:
             conn = self._sqlite_conn
@@ -487,7 +487,7 @@ class SupervisorEngine:
                 row.reviewer_id = reviewer_id
                 row.review_verdict = verdict
                 row.corrected_response = corrected_response
-                row.reviewed_at = datetime.now(timezone.utc)
+                row.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
                 return DecisionReviewItem(
                     id=row.id, session_id=row.session_id, avatar_id=row.avatar_id,
@@ -561,7 +561,7 @@ class SupervisorEngine:
             from sqlalchemy import select
             from src.db.models import OperatorAction
 
-            since = datetime.now(timezone.utc) - timedelta(days=days)
+            since = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
             async with self._db.session() as session:
                 result = await session.execute(
                     select(OperatorAction).where(

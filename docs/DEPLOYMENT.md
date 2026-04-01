@@ -50,9 +50,7 @@ docker compose logs -f core
 | `redis-exporter` | 9121 | Redis metrics (prod only) |
 
 ### Hardware Note
-
-SmartTalker runs **CPU-only** — ASR (FunASR) and TTS (CosyVoice) run locally on CPU,
-while the LLM (Qwen) is accessed via the DashScope cloud API. No GPU is required.
+SmartTalker core (ASR, TTS, LLM) is optimized for **CPU-only** runtime on the Central Server. However, real-time avatar rendering requires a **GPU RenderNode** (RunPod Serverless or Edge Node with NVIDIA GPU).
 
 ## Production Deployment
 
@@ -98,6 +96,40 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # Verify all services are healthy
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
+
+## Cloudflare Deployment
+
+The dashboards and API proxy are deployed to Cloudflare for global low-latency access.
+
+### 1. Dashboards (Admin & Customer)
+```bash
+cd frontend/admin-dashboard # or customer-dashboard
+npm install
+npx wrangler pages deploy .next/out --project-name maskki-admin
+```
+
+### 2. Workers API (Proxy)
+```bash
+cd workers/workers-api
+npm install
+npx wrangler deploy
+# Set secrets for Central Server communication
+npx wrangler secret put CENTRAL_API_KEY
+npx wrangler secret put PADDLE_WEBHOOK_SECRET
+```
+
+### 3. Storage (R2) & Database (D1)
+Configure your R2 buckets and D1 databases in `wrangler.toml` before deploying the Workers API.
+
+## Paddle Integration
+
+### 1. Webhook Setup
+- Navigate to **Paddle Dashboard → Developer Tools → Webhooks**.
+- Set the URL to `https://api.maskki.com/api/v1/webhooks/paddle`.
+- Select events: `subscription.created`, `subscription.updated`, `subscription.canceled`, `transaction.completed`.
+
+### 2. Environment Variables
+Ensure `PADDLE_PUBLIC_KEY` and `PADDLE_WEBHOOK_SECRET` are set in your `.env.production` or Cloudflare Secrets.
 
 ## Environment Variables
 
@@ -230,16 +262,15 @@ sudo crontab -e
 ## Production Checklist
 
 - [ ] Set `APP_ENV=production` and `DEBUG=false`
-- [ ] Configure `CORS_ORIGINS` (no wildcard)
-- [ ] Set a strong `API_KEY`
-- [ ] Set `WHATSAPP_*` credentials for WhatsApp integration
-- [ ] Obtain and configure SSL certificates
-- [ ] Set `DOMAIN_NAME` to your actual domain
-- [ ] Set `GRAFANA_ADMIN_PASSWORD` to a strong password
-- [ ] Configure firewall (only expose ports 80/443)
-- [ ] Set `STORAGE_MAX_FILE_AGE_HOURS` for cleanup
-- [ ] Set up backup cron jobs
-- [ ] Run `python scripts/benchmark.py` to verify latency
+- [ ] Configure `CORS_ORIGINS` to `https://*.maskki.com`
+- [ ] Set a strong `API_KEY` and `ADMIN_API_KEY`
+- [ ] Set `PADDLE_PUBLIC_KEY` and `PADDLE_WEBHOOK_SECRET`
+- [ ] Deploy Workers API to Cloudflare
+- [ ] Deploy Dashboards to Cloudflare Pages
+- [ ] Obtain and configure SSL certificates for `ws.maskki.com`
+- [ ] Verify D1 and R2 bindings in Cloudflare
+- [ ] Configure `GPU_NODE_URL` for rendering
+- [ ] Set up backup cron jobs for PostgreSQL
 
 ## Health Monitoring
 

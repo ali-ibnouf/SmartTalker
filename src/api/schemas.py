@@ -25,6 +25,49 @@ _LANG_RE = re.compile(r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8})?$")
 # =============================================================================
 
 
+class ChatRequest(BaseModel):
+    """Request body for REST chat endpoints.
+
+    Attributes:
+        text: User's input text.
+        avatar_id: Avatar identifier (optional, uses default if omitted).
+        language: Target response language code.
+    """
+
+    text: str = Field(..., min_length=1, max_length=2000, description="Input text")
+    avatar_id: str = Field(default="default", description="Avatar ID")
+    language: str = Field(default="auto", description="Language code")
+
+    @field_validator("language")
+    @classmethod
+    def _validate_language(cls, v: str) -> str:
+        if v.lower() == "auto":
+            return "auto"
+        if not _LANG_RE.match(v):
+            raise ValueError(f"Invalid language code: {v}")
+        return v.lower()
+
+
+class ChatResponse(BaseModel):
+    """Response from REST chat endpoints.
+
+    Attributes:
+        text: AI-generated response text.
+        emotion: Detected emotion.
+        latency_ms: Total processing time.
+        breakdown: Per-layer latency breakdown.
+        kb_confidence: Knowledge base confidence score.
+        escalated: Whether the query was escalated.
+    """
+
+    text: str = Field(..., description="AI response text")
+    emotion: str = Field(default="neutral", description="Detected emotion")
+    latency_ms: int = Field(default=0, description="Total processing time (ms)")
+    breakdown: dict[str, int] = Field(default_factory=dict, description="Per-layer latency")
+    kb_confidence: Optional[float] = Field(default=None, description="KB confidence score")
+    escalated: bool = Field(default=False, description="Whether escalated to operator")
+
+
 class TextRequest(BaseModel):
     """Request body for text-to-speech endpoint.
 

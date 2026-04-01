@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.middleware import (
     APIKeyAuthMiddleware,
+    CORSCleanupMiddleware,
     LoggingMiddleware,
     RedisRateLimitMiddleware,
     RequestBodyLimitMiddleware,
@@ -39,6 +40,7 @@ from src.services.ai_agent.routes import router as agent_router
 from src.api.channel_routes import router as channel_router
 from src.api.onboarding_routes import router as onboarding_router
 from src.api.visitor_routes import router as visitor_router
+from src.api.session_links import router as session_links_router
 from src.api.webhooks.whatsapp import router as wa_webhook_router
 from src.api.webhooks.telegram import router as tg_webhook_router
 from src.api.webhooks.paddle import router as paddle_webhook_router
@@ -418,6 +420,7 @@ def create_app() -> FastAPI:
     # Outer middlewares
     cors_config = get_cors_config(config.cors_origins)
     application.add_middleware(CORSMiddleware, **cors_config)
+    application.add_middleware(CORSCleanupMiddleware)
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(LoggingMiddleware)
     application.add_middleware(RequestIDMiddleware)
@@ -435,6 +438,7 @@ def create_app() -> FastAPI:
     application.include_router(channel_router)
     application.include_router(onboarding_router)
     application.include_router(visitor_router)
+    application.include_router(session_links_router)
     application.include_router(wa_webhook_router)
     application.include_router(tg_webhook_router)
     application.include_router(paddle_webhook_router)

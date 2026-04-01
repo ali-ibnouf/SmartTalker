@@ -245,6 +245,10 @@ class Settings(BaseSettings):
     telegram_bot_username: Optional[str] = Field(default=None, description="Telegram bot username")
     telegram_webhook_url: Optional[str] = Field(default=None, description="Public webhook URL for Telegram")
 
+    # ── Session Links ────────────────────────────────────────────────────
+    session_link_base_url: str = Field(default="https://app.maskki.com", description="Base URL for shareable session links")
+    session_link_default_ttl_minutes: int = Field(default=30, description="Default TTL for session links in minutes")
+
     # ── WebRTC ───────────────────────────────────────────────────────────
     webrtc_enabled: bool = Field(default=False, description="Enable WebRTC signaling endpoint")
     webrtc_stun_servers: str = Field(

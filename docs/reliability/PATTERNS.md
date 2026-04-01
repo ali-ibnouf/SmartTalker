@@ -64,3 +64,30 @@
 - **How to detect:** Look for synchronous `def close()` or `def unload()` methods that set clients to None without checking for `aclose` or `close`.
 - **How to prevent:** Any class initializing async clients must have an `async def` teardown function.
 - **Example fix:** See ISSUE_LOG 2026-03-19 "TTS HTTP client not properly closed on shutdown"
+
+---
+
+## Pattern: SSRF in User-Provided Webhook or Tool URLs
+
+- **Description:** Allowing the AI agent to call arbitrary URLs provided by users or LLM tool calls without validation. This can be used to scan internal networks or access metadata services.
+- **How to detect:** `grep -rn "httpx.get\|httpx.post" --include="*.py" src/` — look for requests where the URL comes from a variable.
+- **How to prevent:** Use a dedicated `SSRF_PROTECTOR` utility to validate URLs against a denylist of internal IP ranges (127.0.0.1, 10.0.0.0/8, etc.) and restricted domains.
+- **Example fix:** See ISSUE_LOG 2026-03-24 "SSRF vulnerability in ToolRegistry execution"
+
+---
+
+## Pattern: Unsafe Indexing on Paddle Callback Payloads
+
+- **Description:** Directly accessing `payload['data']['items'][0]` in Paddle webhooks. Paddle payloads can vary significantly between event types.
+- **How to detect:** `grep -rn "\[" src/api/webhooks/paddle.py`
+- **How to prevent:** Always use `.get()` and check list length. For Paddle, use their official SDK or a robust Pydantic model for validation.
+- **Example fix:** See ISSUE_LOG 2026-03-27 "Paddle webhook crash on empty transaction"
+
+---
+
+## Pattern: Centralized Background Task Exception Handling
+
+- **Description:** Using `asyncio.create_task` scattered across the codebase with varying levels of error handling.
+- **How to detect:** Search for any `create_task` call.
+- **How to prevent:** Use `src.utils.async_utils.safe_create_task(coro, context_id)` which automatically attaches a logger-aware error handler.
+- **Example fix:** See ISSUE_LOG 2026-03-28 "Consolidate background task handling"

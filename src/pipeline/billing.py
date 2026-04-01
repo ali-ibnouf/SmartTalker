@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from src.config import Settings
@@ -214,7 +214,7 @@ class BillingEngine:
                 }
 
             plan_total = subscription.monthly_seconds
-            now = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
             usage_result = await session.execute(
@@ -340,9 +340,8 @@ class BillingEngine:
 
         from sqlalchemy import select
         from src.db.models import UsageRecord
-        from datetime import timedelta
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
         async with self._db.session() as session:
             result = await session.execute(
@@ -438,8 +437,8 @@ class BillingEngine:
                 channel=billing_session.channel,
                 duration_s=billing_session.total_seconds,
                 cost=billing_session.total_cost,
-                started_at=datetime.fromtimestamp(billing_session.started_at, tz=timezone.utc),
-                ended_at=datetime.fromtimestamp(billing_session.stopped_at, tz=timezone.utc),
+                started_at=datetime.fromtimestamp(billing_session.started_at, tz=timezone.utc).replace(tzinfo=None),
+                ended_at=datetime.fromtimestamp(billing_session.stopped_at, tz=timezone.utc).replace(tzinfo=None),
             )
             session.add(record)
             await session.commit()

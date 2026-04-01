@@ -1036,17 +1036,39 @@ class WebSocketManager:
 # ═════════════════════════════════════════════════════════════════════════
 
 
+async def _check_customer_api_key(websocket: WebSocket, client_key: str) -> bool:
+    """Check if a client key matches an active customer's API key in the DB."""
+    try:
+        db = getattr(websocket.app.state, "db", None)
+        if not db:
+            return False
+        from src.db.models import Customer
+        from sqlalchemy import select
+
+        async with db.session() as session:
+            result = await session.execute(
+                select(Customer.id, Customer.is_active, Customer.suspended)
+                .where(Customer.api_key == client_key)
+            )
+            customer = result.first()
+            return bool(customer and customer.is_active and not customer.suspended)
+    except Exception as exc:
+        logger.debug(f"WebSocket customer key lookup failed: {exc}")
+    return False
+
+
 async def _authenticate_websocket(
     websocket: WebSocket,
     api_key: str,
 ) -> bool:
     """Authenticate a WebSocket connection.
 
-    Checks query param first, then waits for an auth message (5s timeout).
+    Checks query param against global key first, then per-customer key in DB,
+    then waits for an auth message (5s timeout).
 
     Args:
         websocket: The accepted WebSocket connection.
-        api_key: The expected API key.
+        api_key: The global API key.
 
     Returns:
         True if authenticated successfully.
@@ -1054,10 +1076,14 @@ async def _authenticate_websocket(
     import hmac as _hmac
     import json as _json
 
-    # Check query parameter first (constant-time comparison)
+    # Check query parameter — global key (constant-time comparison)
     query_key = websocket.query_params.get("api_key", "")
-    if query_key and _hmac.compare_digest(query_key, api_key):
-        return True
+    if query_key:
+        if _hmac.compare_digest(query_key, api_key):
+            return True
+        # Check per-customer key in database
+        if await _check_customer_api_key(websocket, query_key):
+            return True
 
     # Wait for auth message with 5 second timeout
     try:
@@ -1066,8 +1092,11 @@ async def _authenticate_websocket(
             return False
         data = _json.loads(raw)
         client_key = data.get("api_key", "")
-        if data.get("type") == "auth" and client_key and _hmac.compare_digest(client_key, api_key):
-            return True
+        if data.get("type") == "auth" and client_key:
+            if _hmac.compare_digest(client_key, api_key):
+                return True
+            if await _check_customer_api_key(websocket, client_key):
+                return True
     except (asyncio.TimeoutError, _json.JSONDecodeError, TypeError):
         pass
 

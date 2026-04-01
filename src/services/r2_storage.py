@@ -196,6 +196,43 @@ class R2Storage:
         )
         return url
 
+    # ── Incoming Media (visitor uploads) ──────────────────────────────────
+
+    def upload_incoming_media(
+        self,
+        session_id: str,
+        media_bytes: bytes,
+        media_type: str,
+        content_type: str = "application/octet-stream",
+        file_ext: str = "bin",
+    ) -> str:
+        """Upload incoming visitor media to R2 for supervisor reference.
+
+        Args:
+            session_id: Channel session identifier.
+            media_bytes: Raw media bytes.
+            media_type: Category (image/video/document).
+            content_type: MIME type.
+            file_ext: File extension for the key.
+
+        Returns:
+            Public URL of the uploaded media.
+        """
+        timestamp = int(time.time() * 1000)
+        key = f"incoming/{session_id}/{media_type}_{timestamp}.{file_ext}"
+        self._put_object(key, media_bytes, content_type)
+        url = self._public_key_url(key)
+
+        logger.info(
+            "Incoming media uploaded",
+            extra={
+                "session_id": session_id,
+                "media_type": media_type,
+                "size_bytes": len(media_bytes),
+            },
+        )
+        return url
+
     # ── Deletion ───────────────────────────────────────────────────────────
 
     def delete_employee_media(self, employee_id: str) -> int:

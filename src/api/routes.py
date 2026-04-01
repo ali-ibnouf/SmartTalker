@@ -11,7 +11,7 @@ import re as _re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import aiofiles
 
@@ -22,6 +22,8 @@ from src.api.schemas import (
     ActiveSessionSummary,
     ActivityTimelineEntry,
     ActivityTimelineResponse,
+    ChatRequest,
+    ChatResponse,
     CustomerCreate,
     CustomerResponse,
     AdminSubscriptionRequest,
@@ -158,6 +160,118 @@ async def text_to_speech(
             total_latency_ms=result.total_latency_ms,
             breakdown=result.breakdown,
             request_id=request_id,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Pipeline processing timed out")
+    except SmartTalkerError as exc:
+        raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
+
+
+# =============================================================================
+# REST Chat
+# =============================================================================
+
+
+def _check_llm_ready(pipeline: Any) -> None:
+    """Zero-cost pre-check: fail fast if the LLM circuit breaker is open.
+
+    When DashScope is unreachable, the LLM retries 4x with backoff (up to
+    127s total).  That exceeds every proxy timeout in the chain (Nginx 90s,
+    Cloudflare ~30s).  This check reads the circuit breaker state (no I/O)
+    and returns 503 immediately when the LLM is known to be down.
+    """
+    llm = pipeline._llm
+    # Circuit breaker open → 3+ consecutive failures in the last 30s
+    if llm._cb_failures >= 3:
+        import time
+
+        elapsed = time.time() - llm._cb_last_failure
+        if elapsed < 30.0:
+            raise HTTPException(
+                status_code=503,
+                detail="LLM service temporarily unavailable "
+                f"({llm._cb_failures} consecutive failures). "
+                f"Try again in {30.0 - elapsed:.0f}s.",
+            )
+
+
+# REST chat timeout — tighter than pipeline_timeout (120s) so the
+# response arrives before Nginx (90s) and Cloudflare proxy kill it.
+_REST_CHAT_TIMEOUT = 60.0
+
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Chat",
+    description="Send a text message, receive an AI text response.",
+)
+async def rest_chat(
+    body: ChatRequest,
+    request: Request,
+) -> ChatResponse:
+    """Process text input through the LLM pipeline (text-only, no TTS/audio)."""
+    pipeline = request.app.state.pipeline
+    _check_llm_ready(pipeline)
+    try:
+        result = await asyncio.wait_for(
+            pipeline.process_text(
+                text=body.text,
+                avatar_id=body.avatar_id,
+                voice_id=None,
+                emotion="neutral",
+                language=body.language,
+            ),
+            timeout=_REST_CHAT_TIMEOUT,
+        )
+        return ChatResponse(
+            text=result.response_text,
+            emotion=result.detected_emotion,
+            latency_ms=result.total_latency_ms,
+            breakdown=result.breakdown,
+            kb_confidence=result.kb_confidence,
+            escalated=result.escalated,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Pipeline processing timed out")
+    except SmartTalkerError as exc:
+        raise HTTPException(status_code=500, detail=exc.to_dict()) from exc
+
+
+@router.post(
+    "/avatars/{avatar_id}/chat",
+    response_model=ChatResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Avatar Chat",
+    description="Send a text message to a specific avatar, receive an AI text response.",
+)
+async def rest_avatar_chat(
+    avatar_id: str,
+    body: ChatRequest,
+    request: Request,
+) -> ChatResponse:
+    """Process text input through the LLM pipeline for a specific avatar."""
+    pipeline = request.app.state.pipeline
+    _check_llm_ready(pipeline)
+    try:
+        result = await asyncio.wait_for(
+            pipeline.process_text(
+                text=body.text,
+                avatar_id=avatar_id,
+                voice_id=None,
+                emotion="neutral",
+                language=body.language,
+            ),
+            timeout=_REST_CHAT_TIMEOUT,
+        )
+        return ChatResponse(
+            text=result.response_text,
+            emotion=result.detected_emotion,
+            latency_ms=result.total_latency_ms,
+            breakdown=result.breakdown,
+            kb_confidence=result.kb_confidence,
+            escalated=result.escalated,
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Pipeline processing timed out")
@@ -2557,6 +2671,57 @@ async def get_avatar(avatar_id: str, request: Request) -> dict:
         }
 
 
+@router.patch(
+    "/avatars/{avatar_id}",
+    summary="Update Avatar",
+    description="Update avatar name and/or language.",
+)
+async def update_avatar(avatar_id: str, request: Request) -> dict:
+    """Update editable avatar fields (name, language)."""
+    from sqlalchemy import update as sql_update, select
+    from src.db.models import Avatar
+
+    db = getattr(request.app.state, "db", None)
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database is not available")
+
+    body = await request.json()
+    updates: dict = {}
+    if "name" in body:
+        name = body["name"].strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name cannot be empty")
+        if len(name) > 255:
+            raise HTTPException(status_code=400, detail="name too long (max 255)")
+        updates["name"] = name
+    if "language" in body:
+        updates["language"] = body["language"][:10]
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    async with db.session() as session:
+        result = await session.execute(
+            select(Avatar).where(Avatar.id == avatar_id)
+        )
+        avatar = result.scalars().first()
+        if not avatar:
+            raise HTTPException(status_code=404, detail="Avatar not found")
+
+        for k, v in updates.items():
+            setattr(avatar, k, v)
+        await session.commit()
+        await session.refresh(avatar)
+
+        logger.info("Avatar updated", extra={"avatar_id": avatar_id, "fields": list(updates.keys())})
+        return {
+            "id": avatar.id,
+            "name": avatar.name,
+            "language": avatar.language,
+            "avatar_type": avatar.avatar_type,
+        }
+
+
 # =============================================================================
 # VRM Avatar
 # =============================================================================
@@ -2738,6 +2903,52 @@ async def upload_avatar_photo(
         "photo_url": photo_url,
         "status": "preprocessing",
         "message": "Photo uploaded. Face preprocessing started in background.",
+    }
+
+
+@router.delete(
+    "/avatars/{avatar_id}/photo",
+    summary="Delete Avatar Photo",
+    description="Remove an avatar's photo and face data from R2 and reset preprocessing state.",
+)
+async def delete_avatar_photo(
+    avatar_id: str,
+    request: Request,
+) -> dict:
+    """Delete an avatar's photo, face data, and reset preprocessing state."""
+    config = request.app.state.config
+    db = getattr(request.app.state, "db", None)
+
+    # Delete photo + face_data from R2
+    from src.services.r2_storage import R2Storage
+    r2 = R2Storage(config)
+    # delete_employee_media removes everything under employees/{avatar_id}/
+    deleted = r2.delete_employee_media(avatar_id)
+
+    # Reset avatar DB fields
+    if db is not None:
+        from sqlalchemy import update as sql_update
+        from src.db.models import Avatar
+        async with db.session() as session:
+            await session.execute(
+                sql_update(Avatar)
+                .where(Avatar.id == avatar_id)
+                .values(
+                    photo_url=None,
+                    face_data_url=None,
+                    photo_preprocessed=False,
+                )
+            )
+            await session.commit()
+
+    logger.info(
+        "Avatar photo deleted",
+        extra={"avatar_id": avatar_id, "r2_objects_deleted": deleted},
+    )
+    return {
+        "avatar_id": avatar_id,
+        "deleted": True,
+        "r2_objects_deleted": deleted,
     }
 
 

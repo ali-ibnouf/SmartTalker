@@ -351,24 +351,32 @@ class SmartTalkerPipeline:
         body_state = self._select_body_state(response_text, emotion)
 
         # ── TTS (async DashScope WebSocket) ─────────────────────────────
-        voice_ref = self._resolve_voice_ref(voice_id)
-        with INFERENCE_LATENCY.labels(model_type="tts").time():
-            tts_result = await self._tts.synthesize(
-                text=response_text,
-                voice_id=voice_ref,
-                emotion=emotion,
-                language=language,
-            )
-        breakdown["tts_ms"] = tts_result.latency_ms
+        tts_audio_path = ""
+        tts_lip_sync: dict = {}
+        try:
+            voice_ref = self._resolve_voice_ref(voice_id)
+            with INFERENCE_LATENCY.labels(model_type="tts").time():
+                tts_result = await self._tts.synthesize(
+                    text=response_text,
+                    voice_id=voice_ref,
+                    emotion=emotion,
+                    language=language,
+                )
+            breakdown["tts_ms"] = tts_result.latency_ms
+            tts_audio_path = tts_result.audio_path
+            tts_lip_sync = tts_result.lip_sync
+        except Exception as tts_exc:
+            logger.error(f"TTS synthesis failed, returning text-only response: {tts_exc}")
+            breakdown["tts_ms"] = 0
 
         total_ms = int((time.perf_counter() - start) * 1000)
 
         result = PipelineResult(
-            audio_path=tts_result.audio_path,
+            audio_path=tts_audio_path,
             response_text=response_text,
             detected_emotion=emotion,
             body_state=body_state,
-            lip_sync=tts_result.lip_sync,
+            lip_sync=tts_lip_sync,
             total_latency_ms=total_ms,
             breakdown=breakdown,
             kb_confidence=kb_confidence,
@@ -501,23 +509,31 @@ class SmartTalkerPipeline:
         body_state = self._select_body_state(response_text, emotion)
 
         # ── TTS (async DashScope WebSocket) ──────────────────────────────
-        voice_ref = self._resolve_voice_ref(voice_id)
-        tts_result = await self._tts.synthesize(
-            text=response_text,
-            voice_id=voice_ref,
-            emotion=emotion,
-            language=detected_lang,
-        )
-        breakdown["tts_ms"] = tts_result.latency_ms
+        tts_audio_path = ""
+        tts_lip_sync: dict = {}
+        try:
+            voice_ref = self._resolve_voice_ref(voice_id)
+            tts_result = await self._tts.synthesize(
+                text=response_text,
+                voice_id=voice_ref,
+                emotion=emotion,
+                language=detected_lang,
+            )
+            breakdown["tts_ms"] = tts_result.latency_ms
+            tts_audio_path = tts_result.audio_path
+            tts_lip_sync = tts_result.lip_sync
+        except Exception as tts_exc:
+            logger.error(f"TTS synthesis failed, returning text-only response: {tts_exc}")
+            breakdown["tts_ms"] = 0
 
         total_ms = int((time.perf_counter() - start) * 1000)
 
         result = PipelineResult(
-            audio_path=tts_result.audio_path,
+            audio_path=tts_audio_path,
             response_text=response_text,
             detected_emotion=emotion,
             body_state=body_state,
-            lip_sync=tts_result.lip_sync,
+            lip_sync=tts_lip_sync,
             total_latency_ms=total_ms,
             breakdown=breakdown,
             kb_confidence=kb_confidence,

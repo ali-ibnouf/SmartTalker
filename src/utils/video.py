@@ -1,12 +1,15 @@
 """Video processing utilities.
 
-Functions: combine_audio_video, get_video_info,
+Functions: combine_audio_video, get_video_info, extract_audio,
+extract_audio_from_bytes, probe_media_info,
 validate_image, resize_image.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -18,6 +21,14 @@ logger = setup_logger("utils.video")
 
 # Supported image formats for avatar references
 SUPPORTED_IMAGE_FORMATS: set[str] = {"png", "jpg", "jpeg", "webp"}
+
+# Supported video/audio input formats for extraction
+SUPPORTED_VIDEO_FORMATS: set[str] = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".3gp"}
+SUPPORTED_AUDIO_INPUT_FORMATS: set[str] = {".mp3", ".ogg", ".m4a", ".wav", ".opus", ".aac", ".webm"}
+
+# Extraction limits
+MAX_VIDEO_SIZE_MB: int = 50
+MAX_AUDIO_DURATION_SECONDS: int = 300  # 5 minutes
 
 # Image constraints
 MAX_IMAGE_SIZE_MB: int = 10
@@ -228,6 +239,186 @@ def _get_image_dimensions(image_path: Path) -> dict[str, int]:
             message="Failed to read image dimensions",
             original_exception=exc,
         ) from exc
+
+
+def extract_audio(
+    video_path: Path,
+    output_format: str = "wav",
+    sample_rate: int = 16000,
+    channels: int = 1,
+    output_path: Optional[Path] = None,
+) -> Path:
+    """Extract audio track from a video file.
+
+    Produces mono PCM WAV at 16kHz by default — ready for ASR input.
+
+    Args:
+        video_path: Path to input video file.
+        output_format: Output audio format (wav, ogg, mp3).
+        sample_rate: Sample rate in Hz (16000 for ASR).
+        channels: Number of channels (1 = mono).
+        output_path: Optional output path. Defaults to a temp file.
+
+    Returns:
+        Path to the extracted audio file.
+
+    Raises:
+        SmartTalkerError: If format unsupported, file too large, or ffmpeg fails.
+    """
+    video_path = Path(video_path)
+
+    if not video_path.exists():
+        raise SmartTalkerError(message=f"Video file not found: {video_path}")
+
+    ext = video_path.suffix.lower()
+    if ext not in SUPPORTED_VIDEO_FORMATS:
+        raise SmartTalkerError(
+            message=f"Unsupported video format: {ext}",
+            detail=f"Supported: {SUPPORTED_VIDEO_FORMATS}",
+        )
+
+    size_mb = video_path.stat().st_size / (1024 * 1024)
+    if size_mb > MAX_VIDEO_SIZE_MB:
+        raise SmartTalkerError(
+            message=f"Video too large: {size_mb:.1f}MB (max {MAX_VIDEO_SIZE_MB}MB)",
+        )
+
+    # Check the file actually has an audio stream
+    info = probe_media_info(video_path)
+    if not info.get("has_audio"):
+        raise SmartTalkerError(
+            message="Video has no audio track",
+            detail=str(video_path),
+        )
+
+    if output_path is None:
+        fd, tmp = tempfile.mkstemp(suffix=f".{output_format}")
+        os.close(fd)
+        output_path = Path(tmp)
+
+    codec = "pcm_s16le" if output_format == "wav" else "libvorbis" if output_format == "ogg" else output_format
+    args = [
+        "-i", str(video_path),
+        "-vn",
+        "-acodec", codec,
+        "-ar", str(sample_rate),
+        "-ac", str(channels),
+        "-t", str(MAX_AUDIO_DURATION_SECONDS),
+        str(output_path),
+    ]
+
+    _run_ffmpeg(args, timeout=60)
+
+    out_size = output_path.stat().st_size
+    if out_size < 100:
+        output_path.unlink(missing_ok=True)
+        raise SmartTalkerError(
+            message=f"Extracted audio too small ({out_size} bytes) — video may have a silent audio track",
+        )
+
+    logger.info(
+        "Audio extracted from video",
+        extra={
+            "video": str(video_path),
+            "output": str(output_path),
+            "size_kb": round(out_size / 1024, 1),
+            "sample_rate": sample_rate,
+        },
+    )
+    return output_path
+
+
+def extract_audio_from_bytes(
+    video_bytes: bytes,
+    video_format: str = "mp4",
+    output_format: str = "wav",
+    sample_rate: int = 16000,
+) -> bytes:
+    """Extract audio from in-memory video bytes.
+
+    Useful for WhatsApp/Telegram downloaded media that arrives as raw bytes.
+
+    Args:
+        video_bytes: Raw video file bytes.
+        video_format: Extension hint for the input (mp4, webm, etc.).
+        output_format: Output audio format (wav by default).
+        sample_rate: Sample rate in Hz.
+
+    Returns:
+        Audio file bytes ready for ASR.
+
+    Raises:
+        SmartTalkerError: If extraction fails.
+    """
+    video_format = video_format.lower().lstrip(".")
+
+    fd, video_tmp = tempfile.mkstemp(suffix=f".{video_format}")
+    os.close(fd)
+    audio_path: Optional[Path] = None
+
+    try:
+        with open(video_tmp, "wb") as f:
+            f.write(video_bytes)
+
+        audio_path = extract_audio(
+            video_path=Path(video_tmp),
+            output_format=output_format,
+            sample_rate=sample_rate,
+            channels=1,
+        )
+
+        with open(audio_path, "rb") as f:
+            return f.read()
+
+    finally:
+        if os.path.exists(video_tmp):
+            os.unlink(video_tmp)
+        if audio_path and audio_path.exists():
+            audio_path.unlink(missing_ok=True)
+
+
+def probe_media_info(media_path: Path) -> dict[str, Any]:
+    """Probe a media file for stream info.
+
+    Args:
+        media_path: Path to any media file (video or audio).
+
+    Returns:
+        Dict with duration, has_audio, has_video, format_name, size_mb.
+
+    Raises:
+        SmartTalkerError: If ffprobe fails.
+    """
+    media_path = Path(media_path)
+    if not media_path.exists():
+        raise SmartTalkerError(message=f"Media file not found: {media_path}")
+
+    stdout = _run_ffprobe([
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams",
+        "-show_format",
+        str(media_path),
+    ], timeout=15)
+
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise SmartTalkerError(
+            message="Failed to parse ffprobe output",
+            original_exception=exc,
+        ) from exc
+
+    streams = data.get("streams", [])
+    fmt = data.get("format", {})
+
+    return {
+        "duration": float(fmt.get("duration", 0)),
+        "has_audio": any(s.get("codec_type") == "audio" for s in streams),
+        "has_video": any(s.get("codec_type") == "video" for s in streams),
+        "format_name": fmt.get("format_name", "unknown"),
+        "size_mb": round(float(fmt.get("size", 0)) / (1024 * 1024), 2),
+    }
 
 
 def resize_image(

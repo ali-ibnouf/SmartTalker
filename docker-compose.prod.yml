@@ -222,6 +222,33 @@ services:
     networks:
       - smarttalker-net
 
+  # ── Admin Dashboard: Next.js admin panel ─────────────────────────────────
+  admin:
+    build:
+      context: ../admin-dashboard
+      dockerfile: Dockerfile
+    container_name: smarttalker-admin
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_CENTRAL_API_URL=https://ws.maskki.com
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3001" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - smarttalker-net
+
   # ── Nginx: SSL termination + reverse proxy ──────────────────────────────
   nginx:
     image: nginx:alpine
@@ -236,6 +263,7 @@ services:
       - certbot-webroot:/var/www/certbot:ro
     depends_on:
       - central
+      - admin
     networks:
       - smarttalker-net
 

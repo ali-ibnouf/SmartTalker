@@ -58,29 +58,29 @@ class TestASREngine:
         assert engine.is_loaded is False
 
     def test_detect_language_arabic(self):
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("مرحبا بالعالم") == "ar"
+        from src.services.language_detector import detect_language
+        assert detect_language("مرحبا بالعالم") == "ar"
 
     def test_detect_language_english(self):
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Hello world this is a test") == "en"
+        from src.services.language_detector import detect_language
+        assert detect_language("Hello world this is a test") == "en"
 
     def test_detect_language_french(self):
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Bonjour le monde, c'est très bien") == "fr"
+        from src.services.language_detector import detect_language
+        assert detect_language("Bonjour le monde, c'est très bien") == "fr"
 
     def test_detect_language_turkish(self):
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Merhaba dünya, nasılsınız güzel günler") == "tr"
+        from src.services.language_detector import detect_language
+        assert detect_language("Merhaba dünya, nasılsınız güzel günler") == "tr"
 
     def test_detect_language_empty(self):
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("") == "unknown"
+        from src.services.language_detector import detect_language, DEFAULT_LANGUAGE
+        assert detect_language("") == DEFAULT_LANGUAGE
 
     def test_detect_language_mixed(self):
-        from src.pipeline.asr import ASREngine
-        result = ASREngine._detect_language("مرحبا Hello")
-        assert result in ("ar", "en", "mixed")
+        from src.services.language_detector import detect_language
+        result = detect_language("مرحبا Hello")
+        assert result in ("ar", "en")
 
     def test_cost_tracking(self):
         from src.pipeline.asr import COST_PER_MINUTE

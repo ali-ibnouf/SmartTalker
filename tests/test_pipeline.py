@@ -35,21 +35,18 @@ class TestASREngine:
 
     def test_detect_language_arabic(self, config):
         """Arabic text is detected correctly."""
-        from src.pipeline.asr import ASREngine
-        engine = ASREngine(config)
-        assert engine._detect_language("\u0645\u0631\u062d\u0628\u0627 \u0628\u0643\u0645") == "ar"
+        from src.services.language_detector import detect_language
+        assert detect_language("\u0645\u0631\u062d\u0628\u0627 \u0628\u0643\u0645") == "ar"
 
     def test_detect_language_english(self, config):
         """English text is detected correctly."""
-        from src.pipeline.asr import ASREngine
-        engine = ASREngine(config)
-        assert engine._detect_language("Hello World") == "en"
+        from src.services.language_detector import detect_language
+        assert detect_language("Hello World how are you today") == "en"
 
     def test_detect_language_empty(self, config):
-        """Empty text returns unknown."""
-        from src.pipeline.asr import ASREngine
-        engine = ASREngine(config)
-        assert engine._detect_language("") == "unknown"
+        """Empty text returns default language."""
+        from src.services.language_detector import detect_language, DEFAULT_LANGUAGE
+        assert detect_language("") == DEFAULT_LANGUAGE
 
     def test_transcription_result_dataclass(self, config):
         """TranscriptionResult has expected defaults."""
@@ -556,43 +553,43 @@ class TestConfigSingleton:
 
 
 class TestMultiLanguageDetection:
-    """Tests for 4-language ASR detection."""
+    """Tests for multi-language detection via langdetect."""
 
     def test_detect_french(self, config):
-        """French text with accented characters is detected."""
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Bonjour, comment ça va aujourd'hui?") == "fr"
+        """French text is detected."""
+        from src.services.language_detector import detect_language
+        assert detect_language("Bonjour, comment ça va aujourd'hui mon ami?") == "fr"
 
     def test_detect_french_accents(self, config):
         """French diacriticals trigger French detection."""
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Je suis très heureux de vous rencontrer") == "fr"
+        from src.services.language_detector import detect_language
+        assert detect_language("Je suis très heureux de vous rencontrer aujourd'hui") == "fr"
 
     def test_detect_turkish(self, config):
-        """Turkish text with unique characters is detected."""
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Merhaba, nasılsınız?") == "tr"
+        """Turkish text is detected."""
+        from src.services.language_detector import detect_language
+        assert detect_language("Merhaba, nasılsınız bugün güzel bir gün") == "tr"
 
     def test_detect_turkish_unique_chars(self, config):
         """Turkish-unique ğ/ş/ı characters trigger Turkish detection."""
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Türkiye'de güneşli güzel bir gün geçirdik") == "tr"
+        from src.services.language_detector import detect_language
+        assert detect_language("Türkiye'de güneşli güzel bir gün geçirdik") == "tr"
 
-    def test_detect_mixed_returns_mixed(self, config):
-        """Mostly non-Latin/non-Arabic returns mixed."""
-        from src.pipeline.asr import ASREngine
-        result = ASREngine._detect_language("123 456 789")
-        assert result == "unknown"
+    def test_detect_numbers_returns_default(self, config):
+        """Mostly numbers returns default language."""
+        from src.services.language_detector import detect_language, DEFAULT_LANGUAGE
+        result = detect_language("123 456 789")
+        assert result == DEFAULT_LANGUAGE
 
     def test_arabic_still_works(self, config):
-        """Arabic detection unchanged after expansion."""
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("\u0645\u0631\u062d\u0628\u0627 \u0628\u0627\u0644\u0639\u0627\u0644\u0645") == "ar"
+        """Arabic detection works with langdetect."""
+        from src.services.language_detector import detect_language
+        assert detect_language("\u0645\u0631\u062d\u0628\u0627 \u0628\u0627\u0644\u0639\u0627\u0644\u0645") == "ar"
 
     def test_english_still_works(self, config):
-        """English detection unchanged after expansion."""
-        from src.pipeline.asr import ASREngine
-        assert ASREngine._detect_language("Hello world how are you") == "en"
+        """English detection works with langdetect."""
+        from src.services.language_detector import detect_language
+        assert detect_language("Hello world how are you doing today") == "en"
 
 
 class TestMultiLanguageLLM:
