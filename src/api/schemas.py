@@ -1507,3 +1507,70 @@ class RunPodCostResponse(BaseModel):
     total_execution_ms: int = 0
     preprocess_jobs: int = 0
     render_jobs: int = 0
+
+
+# =============================================================================
+# KB Extended Schemas
+# =============================================================================
+
+
+class KBIngestTextRequest(BaseModel):
+    """Manual text ingestion request."""
+
+    title: str = Field(..., min_length=1, max_length=500, description="Entry title")
+    content: str = Field(..., min_length=1, description="Text content to ingest")
+    tags: list[str] = Field(default_factory=list, description="Optional tags")
+
+
+class KBScrapeRequest(BaseModel):
+    """Web scraping request."""
+
+    url: str = Field(..., min_length=1, description="URL to scrape")
+
+
+class KBKnowledgeItem(BaseModel):
+    """Single knowledge item from EmployeeKnowledge."""
+
+    id: str
+    employee_id: str
+    category: str = "general"
+    question: str
+    answer: str
+    approved: bool = False
+    times_used: int = 0
+    success_rate: float = 0.0
+    created_at: str = ""
+
+
+class KBKnowledgeListResponse(BaseModel):
+    """Paginated list of knowledge items."""
+
+    items: list[KBKnowledgeItem] = Field(default_factory=list)
+    count: int = 0
+
+
+class KBKnowledgeUpdateRequest(BaseModel):
+    """Update a knowledge item."""
+
+    question: str | None = None
+    answer: str | None = None
+    category: str | None = None
+
+
+class KBAnalyticsGrowth(BaseModel):
+    """Single day in KB growth chart."""
+
+    date: str
+    documents: int = 0
+    knowledge: int = 0
+
+
+class KBAnalyticsResponse(BaseModel):
+    """KB performance analytics."""
+
+    total_documents: int = 0
+    total_chunks: int = 0
+    total_knowledge_items: int = 0
+    avg_confidence: float = 0.0
+    unanswered_count: int = 0
+    growth: list[KBAnalyticsGrowth] = Field(default_factory=list)
