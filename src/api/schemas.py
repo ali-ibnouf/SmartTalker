@@ -1574,3 +1574,70 @@ class KBAnalyticsResponse(BaseModel):
     avg_confidence: float = 0.0
     unanswered_count: int = 0
     growth: list[KBAnalyticsGrowth] = Field(default_factory=list)
+
+
+# =============================================================================
+# Admin Overview Schemas
+# =============================================================================
+
+
+class AdminTrainingCustomerRow(BaseModel):
+    """Per-customer training stats row."""
+
+    customer_id: str
+    customer_name: str = ""
+    pending: int = 0
+    approved: int = 0
+    rejected: int = 0
+    avg_confidence: float = 0.0
+
+
+class AdminTrainingRecentItem(BaseModel):
+    """Recent pending learning entry for admin view."""
+
+    id: str
+    customer_id: str
+    customer_name: str = ""
+    employee_id: str = ""
+    learning_type: str = ""
+    old_value: str = ""
+    new_value: str = ""
+    confidence: float = 0.0
+    created_at: str = ""
+
+
+class AdminTrainingOverview(BaseModel):
+    """Aggregated training stats across all customers."""
+
+    total_pending: int = 0
+    total_approved: int = 0
+    total_rejected: int = 0
+    avg_confidence: float = 0.0
+    customers: list[AdminTrainingCustomerRow] = Field(default_factory=list)
+    recent_pending: list[AdminTrainingRecentItem] = Field(default_factory=list)
+
+
+class AdminKnowledgeCustomerRow(BaseModel):
+    """Per-customer knowledge stats row."""
+
+    customer_id: str
+    customer_name: str = ""
+    knowledge_count: int = 0
+    avg_success_rate: float = 0.0
+
+
+class AdminKnowledgeCategoryItem(BaseModel):
+    """Category distribution item."""
+
+    category: str
+    count: int = 0
+
+
+class AdminKnowledgeOverview(BaseModel):
+    """Aggregated KB stats across all customers."""
+
+    total_knowledge_items: int = 0
+    avg_success_rate: float = 0.0
+    total_categories: int = 0
+    customers: list[AdminKnowledgeCustomerRow] = Field(default_factory=list)
+    categories: list[AdminKnowledgeCategoryItem] = Field(default_factory=list)
